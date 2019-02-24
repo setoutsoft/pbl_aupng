@@ -37,6 +37,7 @@ add_subdirectory(${CMAKE_BINARY_DIR}/googletest-src
 if (CMAKE_VERSION VERSION_LESS 2.8.11)
   include_directories("${gtest_SOURCE_DIR}/include")
 endif()
+enable_testing()
 include(GoogleTest)
 
 ###################################################################
@@ -48,6 +49,9 @@ add_library(aupng
     src/upng.c
     src/pebble.h
 )
+target_include_directories(aupng
+    SYSTEM PUBLIC src
+)
 
 ###################################################################
 # test_aupng
@@ -57,6 +61,7 @@ add_executable(test_aupng
     test/test_single_picture.cpp
 )
 target_link_libraries(test_aupng
+    PRIVATE aupng
     PRIVATE gtest_main
 )
 gtest_discover_tests(test_aupng

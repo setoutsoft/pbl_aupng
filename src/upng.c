@@ -115,7 +115,7 @@ struct upng_t {
 
         uint8_t *alpha;
         unsigned char alpha_entries;
-        
+
         upng_color		color_type;
         unsigned		color_depth;
         upng_format		format;
@@ -537,10 +537,10 @@ if (codetree_buffer == NULL) {
 
                 huffman_tree_init(&codetree, codetree_buffer, NUM_DEFLATE_CODE_SYMBOLS, DEFLATE_CODE_BITLEN);
 
-                
+
     huffman_tree_init(&codetreeD, codetreeD_buffer, NUM_DISTANCE_SYMBOLS, DISTANCE_BITLEN);
                 huffman_tree_init(&codelengthcodetree, codelengthcodetree_buffer, NUM_CODE_LENGTH_CODES, CODE_LENGTH_BITLEN);
-    
+
     get_tree_inflate_dynamic(upng, &codetree, &codetreeD, &codelengthcodetree, in, bp, inlength);
         }
 
@@ -704,7 +704,7 @@ static upng_error uz_inflate_data(upng_t* upng, unsigned char* out, unsigned lon
                 } else if (btype == 0) {
                         inflate_uncompressed(upng, out, outsize, &in[inpos], &bp, &pos, insize);	/*no compression */
                 } else {
-#ifndef TINFL			
+#ifndef TINFL
     inflate_huffman(upng, out, outsize, &in[inpos], &bp, &pos, insize, btype);	/*compression, btype 01 or 10 */
 #else
     tinfl_decompressor inflator;
@@ -1155,7 +1155,7 @@ upng_error upng_decode(upng_t* upng)
                     memcpy((char*)upng->text[upng->text_count].text,(const char*)(data + keyword_length), text_length - 1);//no null terminator
                     //add missing null terminator
                     upng->text[upng->text_count].text[text_length - 1] = '\0';
-                    
+
                     upng->text_count++;
                 } else if (upng_chunk_critical(chunk)) {
                         SET_ERROR(upng, UPNG_EUNSUPPORTED);
@@ -1276,7 +1276,7 @@ static upng_t* upng_new(void)
 
         upng->palette = NULL;
         upng->palette_entries = 0;
-        
+
         upng->alpha = NULL;
         upng->alpha_entries = 0;
 
@@ -1312,7 +1312,7 @@ upng_t* upng_new_from_bytes(unsigned char* raw_buffer, unsigned long size, uint8
         return upng;
 }
 
-#if 0
+#ifdef UPNG_USE_STDIO
 upng_t* upng_new_from_file(const char *filename)
 {
         upng_t* upng;
@@ -1372,7 +1372,7 @@ void upng_free(upng_t* upng)
 
     /* deallocate source buffer, if necessary */
     upng_free_source(upng);
-    
+
     if (upng->text_count) {
         for(unsigned int i = 0; i < upng->text_count; i++){
         app_free(upng->text[i].keyword);
@@ -1453,13 +1453,6 @@ case UPNG_PLT:
 unsigned upng_get_bitdepth(const upng_t* upng)
 {
         return upng->color_depth;
-}
-
-unsigned upng_get_pixelsize(const upng_t* upng)
-{
-        unsigned bits = upng_get_bitdepth(upng) * upng_get_components(upng);
-        //bits += bits % 8;
-        return bits;
 }
 
 upng_format upng_get_format(const upng_t* upng)

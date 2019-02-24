@@ -67,8 +67,10 @@ typedef struct __attribute__((__packed__)) rgb {
   unsigned char b;
 } rgb;
 
+#ifdef UPNG_USE_STDIO
+upng_t*		upng_new_from_file	(const char* path);
+#endif
 upng_t*		upng_new_from_bytes	(unsigned char* source_buffer, unsigned long source_size, unsigned char**buffer); //, unsigned char*output_buffer, unsigned long output_size);
-//upng_t*		upng_new_from_file	(const char* path);
 void		upng_free			(upng_t* upng);
 
 upng_error	upng_header			(upng_t* upng);
@@ -84,7 +86,6 @@ int	upng_get_y_offset	(const upng_t* upng);
 unsigned	upng_get_bpp		(const upng_t* upng);
 unsigned	upng_get_bitdepth	(const upng_t* upng);
 unsigned	upng_get_components	(const upng_t* upng);
-unsigned	upng_get_pixelsize	(const upng_t* upng);
 upng_format	upng_get_format		(const upng_t* upng);
 
 //returns count of entries in palette
