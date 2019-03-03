@@ -84,30 +84,31 @@ upng_t*		upng_new_from_file	 (const char* path);
 #endif
 upng_t*		upng_new_from_bytes	 (unsigned char* source_buffer, unsigned long source_size, unsigned char**buffer);
 upng_t*     upng_new_from_source (upng_source source);
+void		upng_free			 (upng_t* upng);
 
-upng_error	upng_header			(upng_t* upng);
-upng_error	upng_decode			(upng_t* upng);
+upng_error	upng_header			 (upng_t* upng);
+upng_error	upng_decode			 (upng_t* upng);
 
-upng_error	upng_get_error		(const upng_t* upng);
-unsigned	upng_get_error_line	(const upng_t* upng);
+upng_error	upng_get_error		 (const upng_t* upng);
+unsigned	upng_get_error_line	 (const upng_t* upng);
 
-unsigned	upng_get_width		(const upng_t* upng);
-unsigned	upng_get_height		(const upng_t* upng);
-int	        upng_get_x_offset	(const upng_t* upng);
-int	        upng_get_y_offset	(const upng_t* upng);
-unsigned	upng_get_bpp		(const upng_t* upng);
-unsigned	upng_get_bitdepth	(const upng_t* upng);
-unsigned	upng_get_components	(const upng_t* upng);
-upng_format	upng_get_format		(const upng_t* upng);
+unsigned	upng_get_width		 (const upng_t* upng);
+unsigned	upng_get_height		 (const upng_t* upng);
+int	        upng_get_x_offset	 (const upng_t* upng);
+int	        upng_get_y_offset	 (const upng_t* upng);
+unsigned	upng_get_bpp		 (const upng_t* upng);
+unsigned	upng_get_bitdepth	 (const upng_t* upng);
+unsigned	upng_get_components	 (const upng_t* upng);
+upng_format	upng_get_format		 (const upng_t* upng);
 
 //returns count of entries in palette
-int upng_get_palette(const upng_t* upng, rgb **palette);
+int         upng_get_palette(const upng_t* upng, rgb **palette);
 
 const unsigned char*	upng_get_buffer		(const upng_t* upng);
 unsigned				upng_get_size		(const upng_t* upng);
 
 //returns keyword and text_out matching keyword
-char*	upng_get_text(const upng_t* upng, char** text_out, unsigned int index);
-int upng_get_alpha(const upng_t* upng, uint8_t **alpha);
+char*	    upng_get_text(const upng_t* upng, char** text_out, unsigned int index);
+int         upng_get_alpha(const upng_t* upng, uint8_t **alpha);
 
 #endif /*defined(UPNG_H)*/
