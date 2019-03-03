@@ -76,7 +76,9 @@ typedef enum upng_color
 
 typedef struct upng_text
 {
-    char *keyword;
+    char* buffer; // deallocate this
+
+    char *keyword; // but not these
     char *text;
 } upng_text;
 
@@ -581,20 +583,31 @@ upng_error upng_decode(upng_t *upng)
         }
         else if (upng_chunk_type(chunk_header) == CHUNK_TEXT)
         {
-            /*int keyword_length = (strlen((const char *)data) + 1);
-            // Copy keyword located at start of data (includes null terminator)
-            upng->text[upng->text_count].keyword = app_malloc(keyword_length);
-            strcpy(upng->text[upng->text_count].keyword, (const char *)data);
+            char* buffer = upng->text[upng->text_count].buffer = app_malloc(length + 1);
+            if (buffer == NULL)
+            {
+                SET_ERROR(upng, UPNG_ENOMEM);
+                return upng->error;
+            }
 
-            int text_length = length - keyword_length + 1;
-            // Copy the text from data, starts after the null after keyword
-            upng->text[upng->text_count].text = app_malloc(text_length);
-            memcpy((char *)upng->text[upng->text_count].text, (const char *)(data + keyword_length), text_length - 1); // no null terminator
-            // add missing null terminator
-            upng->text[upng->text_count].text[text_length - 1] = '\0';
+            if (upng->source.read(upng->source.user, chunk_data_offset, buffer, length) != length)
+            {
+                SET_ERROR(upng, UPNG_EREAD);
+                return upng->error;
+            }
 
-            upng->text_count++;*/
-            // TODO: Reimplement with new source callbacks
+            // Split into keyword and text (separated by null byte)
+            char* terminator = (char*)memchr(buffer, '\0', length);
+            if (terminator == NULL)
+            {
+                SET_ERROR(upng, UPNG_EMALFORMED);
+                return upng->error;
+            }
+            upng->text[upng->text_count].keyword = buffer;
+            upng->text[upng->text_count].text = terminator + 1;
+            buffer[length] = '\0';
+
+            upng->text_count++;
         }
         else if (upng_chunk_critical(chunk_header))
         {
@@ -847,10 +860,7 @@ void upng_free(upng_t *upng)
     if (upng->text_count)
     {
         for (unsigned int i = 0; i < upng->text_count; i++)
-        {
-            app_free(upng->text[i].keyword);
-            app_free(upng->text[i].text);
-        }
+            app_free(upng->text[i].buffer);
     }
     upng->text_count = 0;
 
@@ -934,7 +944,7 @@ upng_format upng_get_format(const upng_t *upng)
     return upng->format;
 }
 
-char *upng_get_text(const upng_t *upng, char **text_out, unsigned int index)
+const char* upng_get_text(const upng_t *upng, const char **text_out, unsigned int index)
 {
     if (index < upng->text_count)
     {

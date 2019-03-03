@@ -109,7 +109,7 @@ const unsigned char*	upng_get_buffer		(const upng_t* upng);
 unsigned				upng_get_size		(const upng_t* upng);
 
 //returns keyword and text_out matching keyword
-char*	    upng_get_text(const upng_t* upng, char** text_out, unsigned int index);
+const char* upng_get_text(const upng_t* upng, const char** text_out, unsigned int index);
 int         upng_get_alpha(const upng_t* upng, uint8_t **alpha);
 
 #endif /*defined(UPNG_H)*/

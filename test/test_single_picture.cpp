@@ -27,6 +27,8 @@ TEST_F(SinglePicture, Load8Bit)
 
     ASSERT_EQ(UPNG_EOK, upng_decode(png));
     ASSERT_EQ(0, memcmp(upng_get_buffer(png), pixels, sizeof(pixels)));
+
+    upng_free(png);
 }
 
 TEST_F(SinglePicture, Load2Bit)
@@ -60,6 +62,8 @@ TEST_F(SinglePicture, Load2Bit)
     ASSERT_EQ(0, memcmp(palettePtr, palette, sizeof(palette)));
     ASSERT_EQ(0, upng_get_alpha(png, &alphaPtr));
     ASSERT_EQ(0, memcmp(upng_get_buffer(png), pixels, sizeof(pixels)));
+
+    upng_free(png);
 }
 
 TEST_F(SinglePicture, Load1Bit)
@@ -82,4 +86,27 @@ TEST_F(SinglePicture, Load1Bit)
 
     ASSERT_EQ(UPNG_EOK, upng_decode(png));
     ASSERT_EQ(0, memcmp(upng_get_buffer(png), pixels, sizeof(pixels)));
+
+    upng_free(png);
+}
+
+TEST_F(SinglePicture, TextChunks)
+{
+    upng_t *png = upng_new_from_file("test/resources/hidden_texts.png");
+    ASSERT_NE(nullptr, png);
+    ASSERT_EQ(UPNG_EOK, upng_decode(png));
+
+    const char* content;
+    ASSERT_STREQ("Author", upng_get_text(png, &content, 0));
+    ASSERT_STREQ("Helco", content);
+
+    ASSERT_STREQ("Description", upng_get_text(png, &content, 1));
+    ASSERT_STREQ("This is a aupng test image", content);
+
+    ASSERT_STREQ("Title", upng_get_text(png, &content, 2));
+    ASSERT_STREQ("Hidden Texts", content);
+
+    ASSERT_EQ(nullptr, upng_get_text(png, &content, 3));
+
+    upng_free(png);
 }
