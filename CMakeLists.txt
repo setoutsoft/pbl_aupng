@@ -47,6 +47,7 @@ include(GoogleTest)
 add_library(aupng
     src/upng.h
     src/upng.c
+    src/upng_inflate.c
     src/pebble.h
 )
 target_include_directories(aupng
