@@ -283,8 +283,8 @@ static void post_process_scanlines(upng_t *upng, unsigned char *out, unsigned ch
         {
             return;
         }
-        //remove_padding_bits(out, in, w * bpp, ((w * bpp + 7) / 8) * 8, h);
-        //fix for non-byte-aligned images
+        // remove_padding_bits(out, in, w * bpp, ((w * bpp + 7) / 8) * 8, h);
+        // fix for non-byte-aligned images
         unsigned aligned_width = ((w * bpp + 7) / 8) * 8;
         remove_padding_bits(in, in, aligned_width, aligned_width, h);
     }
@@ -538,7 +538,7 @@ upng_error upng_decode(upng_t *upng)
         }
         else if (upng_chunk_type(chunk) == CHUNK_PLTE)
         {
-            upng->palette_entries = length / 3; //3 bytes per color entry
+            upng->palette_entries = length / 3; // 3 bytes per color entry
             if (upng->palette)
             {
                 app_free(upng->palette);
@@ -568,8 +568,8 @@ upng_error upng_decode(upng_t *upng)
             int text_length = length - keyword_length + 1;
             // Copy the text from data, starts after the null after keyword
             upng->text[upng->text_count].text = app_malloc(text_length);
-            memcpy((char *)upng->text[upng->text_count].text, (const char *)(data + keyword_length), text_length - 1); //no null terminator
-            //add missing null terminator
+            memcpy((char *)upng->text[upng->text_count].text, (const char *)(data + keyword_length), text_length - 1); // no null terminator
+            // add missing null terminator
             upng->text[upng->text_count].text[text_length - 1] = '\0';
 
             upng->text_count++;
@@ -622,11 +622,9 @@ upng_error upng_decode(upng_t *upng)
     upng->source.buffer = NULL;
 
     /* allocate space to store inflated (but still filtered) data */
-    //inflated_size = ((upng->width * (upng->height * upng_get_bpp(upng) + 7)) / 8) + upng->height;
     int width_aligned_bytes = (upng->width * upng_get_bpp(upng) + 7) / 8;
-    inflated_size = (width_aligned_bytes * upng->height) + upng->height; //pad byte
-                                                                         //Hard-codec CCM usage, avoid compositor buffer (ie. +32k to be safe)
-    //inflated = (void*)0x1000a0d8;//(unsigned char*)app_malloc(inflated_size);
+    inflated_size = (width_aligned_bytes * upng->height) + upng->height; // pad byte
+                                                                         // Hard-codec CCM usage, avoid compositor buffer (ie. +32k to be safe)
     inflated = (unsigned char *)app_malloc(inflated_size);
     if (inflated == NULL)
     {
@@ -641,7 +639,6 @@ upng_error upng_decode(upng_t *upng)
     {
         app_free(inflated);
         app_free(compressed);
-        //free(inflated);
         return upng->error;
     }
 
@@ -649,23 +646,10 @@ upng_error upng_decode(upng_t *upng)
     app_free(compressed);
 
     /* allocate final image buffer */
-    //upng->size = (upng->height * upng->width * upng_get_bpp(upng) + 7) / 8;
     upng->size = width_aligned_bytes * upng->height;
-
-    /*
-        upng->buffer = (unsigned char*)app_malloc(upng->size);
-        if (upng->buffer == NULL) {
-    printf("allocating %ld in upng", upng->size);
-                app_free(inflated);
-                upng->size = 0;
-                SET_ERROR(upng, UPNG_ENOMEM);
-                return upng->error;
-        }
-*/
 
     /* unfilter scanlines */
     post_process_scanlines(upng, inflated, inflated, upng);
-    //app_free(inflated);
     upng->buffer = inflated;
 
     if (upng->error != UPNG_EOK)

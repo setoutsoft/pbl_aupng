@@ -27,6 +27,7 @@ freely, subject to the following restrictions:
 #if !defined(UPNG_H)
 #define UPNG_H
 #include <pebble.h>
+
 typedef enum upng_error {
 	UPNG_EOK			= 0, /* success (no error) */
 	UPNG_ENOMEM			= 1, /* memory allocation failed */
@@ -70,7 +71,7 @@ typedef struct __attribute__((__packed__)) rgb {
 #ifdef UPNG_USE_STDIO
 upng_t*		upng_new_from_file	(const char* path);
 #endif
-upng_t*		upng_new_from_bytes	(unsigned char* source_buffer, unsigned long source_size, unsigned char**buffer); //, unsigned char*output_buffer, unsigned long output_size);
+upng_t*		upng_new_from_bytes	(unsigned char* source_buffer, unsigned long source_size, unsigned char**buffer);
 void		upng_free			(upng_t* upng);
 
 upng_error	upng_header			(upng_t* upng);
@@ -81,8 +82,8 @@ unsigned	upng_get_error_line	(const upng_t* upng);
 
 unsigned	upng_get_width		(const upng_t* upng);
 unsigned	upng_get_height		(const upng_t* upng);
-int	upng_get_x_offset	(const upng_t* upng);
-int	upng_get_y_offset	(const upng_t* upng);
+int	        upng_get_x_offset	(const upng_t* upng);
+int	        upng_get_y_offset	(const upng_t* upng);
 unsigned	upng_get_bpp		(const upng_t* upng);
 unsigned	upng_get_bitdepth	(const upng_t* upng);
 unsigned	upng_get_components	(const upng_t* upng);
