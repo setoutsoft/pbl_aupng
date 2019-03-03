@@ -30,8 +30,7 @@ freely, subject to the following restrictions:
 #include <limits.h>
 #include "upng.h"
 
-extern unsigned char upng_read_bit(unsigned long *bitpointer, const unsigned char *bitstream);
-extern upng_error upng_inflate_huffman(unsigned char *out, unsigned long outsize, const unsigned char *in, unsigned long *bp, unsigned long *pos, unsigned long inlength, uint16_t btype);
+extern upng_error uz_inflate(unsigned char *out, unsigned long outsize, const unsigned char *in, unsigned long insize);
 
 #define MAKE_BYTE(b) ((b)&0xFF)
 #define MAKE_DWORD(a, b, c, d) ((MAKE_BYTE(a) << 24) | (MAKE_BYTE(b) << 16) | (MAKE_BYTE(c) << 8) | MAKE_BYTE(d))
@@ -117,142 +116,6 @@ struct upng_t
     upng_state state;
     upng_source source;
 };
-
-static void inflate_uncompressed(upng_t *upng, unsigned char *out, unsigned long outsize, const unsigned char *in, unsigned long *bp, unsigned long *pos, unsigned long inlength)
-{
-    unsigned long p;
-    uint16_t len, nlen, n;
-
-    /* go to first boundary of byte */
-    while (((*bp) & 0x7) != 0)
-    {
-        (*bp)++;
-    }
-    p = (*bp) / 8; /*byte position */
-
-    /* read len (2 bytes) and nlen (2 bytes) */
-    if (p >= inlength - 4)
-    {
-        SET_ERROR(upng, UPNG_EMALFORMED);
-        return;
-    }
-
-    len = in[p] + 256 * in[p + 1];
-    p += 2;
-    nlen = in[p] + 256 * in[p + 1];
-    p += 2;
-
-    /* check if 16-bit nlen is really the one's complement of len */
-    if (len + nlen != 65535)
-    {
-        SET_ERROR(upng, UPNG_EMALFORMED);
-        return;
-    }
-
-    if ((*pos) + len >= outsize)
-    {
-        SET_ERROR(upng, UPNG_EMALFORMED);
-        return;
-    }
-
-    /* read the literal data: len bytes are now stored in the out buffer */
-    if (p + len > inlength)
-    {
-        SET_ERROR(upng, UPNG_EMALFORMED);
-        return;
-    }
-
-    for (n = 0; n < len; n++)
-    {
-        out[(*pos)++] = in[p++];
-    }
-
-    (*bp) = p * 8;
-}
-
-/*inflate the deflated data (cfr. deflate spec); return value is the error*/
-static upng_error uz_inflate_data(upng_t *upng, unsigned char *out, unsigned long outsize, const unsigned char *in, unsigned long insize, unsigned long inpos)
-{
-    unsigned long bp = 0;  /*bit pointer in the "in" data, current byte is bp >> 3, current bit is bp & 0x7 (from lsb to msb of the byte) */
-    unsigned long pos = 0; /*byte position in the out buffer */
-
-    uint16_t done = 0;
-
-    while (done == 0)
-    {
-        uint16_t btype;
-
-        /* ensure next bit doesn't point past the end of the buffer */
-        if ((bp >> 3) >= insize)
-        {
-            SET_ERROR(upng, UPNG_EMALFORMED);
-            return upng->error;
-        }
-
-        /* read block control bits */
-        done = upng_read_bit(&bp, &in[inpos]);
-        btype = upng_read_bit(&bp, &in[inpos]) | (upng_read_bit(&bp, &in[inpos]) << 1);
-
-        /* process control type appropriateyly */
-        if (btype == 3)
-        {
-            SET_ERROR(upng, UPNG_EMALFORMED);
-            return upng->error;
-        }
-        else if (btype == 0)
-        {
-            inflate_uncompressed(upng, out, outsize, &in[inpos], &bp, &pos, insize); /*no compression */
-        }
-        else
-        {
-            upng_inflate_huffman(out, outsize, &in[inpos], &bp, &pos, insize, btype); /*compression, btype 01 or 10 */
-        }
-
-        /* stop if an error has occured */
-        if (upng->error != UPNG_EOK)
-        {
-            return upng->error;
-        }
-    }
-
-    return upng->error;
-}
-
-static upng_error uz_inflate(upng_t *upng, unsigned char *out, unsigned long outsize, const unsigned char *in, unsigned long insize)
-{
-    /* we require two bytes for the zlib data header */
-    if (insize < 2)
-    {
-        SET_ERROR(upng, UPNG_EMALFORMED);
-        return upng->error;
-    }
-
-    /* 256 * in[0] + in[1] must be a multiple of 31, the FCHECK value is supposed to be made that way */
-    if ((in[0] * 256 + in[1]) % 31 != 0)
-    {
-        SET_ERROR(upng, UPNG_EMALFORMED);
-        return upng->error;
-    }
-
-    /*error: only compression method 8: inflate with sliding window of 32k is supported by the PNG spec */
-    if ((in[0] & 15) != 8 || ((in[0] >> 4) & 15) > 7)
-    {
-        SET_ERROR(upng, UPNG_EMALFORMED);
-        return upng->error;
-    }
-
-    /* the specification of PNG says about the zlib stream: "The additional flags shall not specify a preset dictionary." */
-    if (((in[1] >> 5) & 1) != 0)
-    {
-        SET_ERROR(upng, UPNG_EMALFORMED);
-        return upng->error;
-    }
-
-    /* create output buffer */
-    uz_inflate_data(upng, out, outsize, in, insize, 2);
-
-    return upng->error;
-}
 
 /*Paeth predicter, used by PNG filter type 4*/
 static int paeth_predictor(int a, int b, int c)
@@ -773,7 +636,7 @@ upng_error upng_decode(upng_t *upng)
     }
 
     /* decompress image data */
-    error = uz_inflate(upng, inflated, inflated_size, compressed, compressed_size);
+    error = uz_inflate(inflated, inflated_size, compressed, compressed_size);
     if (error != UPNG_EOK)
     {
         app_free(inflated);

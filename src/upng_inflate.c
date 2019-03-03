@@ -93,7 +93,7 @@ static const uint16_t FIXED_DISTANCE_TREE[NUM_DISTANCE_SYMBOLS * 2] = {
     18, 19, 54, 55, 20, 21, 22, 23, 57, 60, 58, 59, 24, 25, 26, 27, 61, 62, 28,
     29, 30, 31, 0, 0};
 
-extern unsigned char upng_read_bit(unsigned long *bitpointer, const unsigned char *bitstream)
+static unsigned char read_bit(unsigned long *bitpointer, const unsigned char *bitstream)
 {
     unsigned char result = (unsigned char)((bitstream[(*bitpointer) >> 3] >> ((*bitpointer) & 0x7)) & 1);
     (*bitpointer)++;
@@ -104,7 +104,7 @@ static unsigned read_bits(unsigned long *bitpointer, const unsigned char *bitstr
 {
     unsigned result = 0, i;
     for (i = 0; i < nbits; i++)
-        result |= ((unsigned)upng_read_bit(bitpointer, bitstream)) << i;
+        result |= ((unsigned)read_bit(bitpointer, bitstream)) << i;
     return result;
 }
 
@@ -212,7 +212,7 @@ static uint16_t huffman_decode_symbol(const unsigned char *in, unsigned long *bp
         if (((*bp) & 0x07) == 0 && ((*bp) >> 3) > inlength)
             return INVALID_CODE_INDEX;
 
-        bit = upng_read_bit(bp, in);
+        bit = read_bit(bp, in);
 
         ct = codetree->tree2d[(treepos << 1) | bit];
         if (ct < codetree->numcodes)
@@ -395,7 +395,7 @@ static upng_error get_tree_inflate_dynamic(huffman_tree *codetree, huffman_tree 
 }
 
 /*inflate a block with dynamic of fixed Huffman tree*/
-extern upng_error upng_inflate_huffman(unsigned char *out, unsigned long outsize, const unsigned char *in, unsigned long *bp, unsigned long *pos, unsigned long inlength, uint16_t btype)
+static upng_error inflate_huffman(unsigned char *out, unsigned long outsize, const unsigned char *in, unsigned long *bp, unsigned long *pos, unsigned long inlength, uint16_t btype)
 {
     // Converted to malloc, was overflowing 2k stack on Pebble
     uint16_t *codetree_buffer = (uint16_t *)app_malloc(sizeof(uint16_t) * DEFLATE_CODE_BUFFER_SIZE);
@@ -503,5 +503,106 @@ extern upng_error upng_inflate_huffman(unsigned char *out, unsigned long outsize
     }
 
     app_free(codetree_buffer);
+    return UPNG_EOK;
+}
+
+static upng_error inflate_uncompressed(unsigned char *out, unsigned long outsize, const unsigned char *in, unsigned long *bp, unsigned long *pos, unsigned long inlength)
+{
+    unsigned long p;
+    uint16_t len, nlen, n;
+
+    /* go to first boundary of byte */
+    while (((*bp) & 0x7) != 0)
+    {
+        (*bp)++;
+    }
+    p = (*bp) / 8; /*byte position */
+
+    /* read len (2 bytes) and nlen (2 bytes) */
+    if (p >= inlength - 4)
+        return UPNG_EMALFORMED;
+
+    len = in[p] + 256 * in[p + 1];
+    p += 2;
+    nlen = in[p] + 256 * in[p + 1];
+    p += 2;
+
+    /* check if 16-bit nlen is really the one's complement of len */
+    if (len + nlen != 65535)
+        return UPNG_EMALFORMED;
+
+    if ((*pos) + len >= outsize)
+        return UPNG_EMALFORMED;
+
+    /* read the literal data: len bytes are now stored in the out buffer */
+    if (p + len > inlength)
+        return UPNG_EMALFORMED;
+
+    for (n = 0; n < len; n++)
+    {
+        out[(*pos)++] = in[p++];
+    }
+
+    (*bp) = p * 8;
+}
+
+/*inflate the deflated data (cfr. deflate spec); return value is the error*/
+static upng_error uz_inflate_data(unsigned char *out, unsigned long outsize, const unsigned char *in, unsigned long insize, unsigned long inpos)
+{
+    unsigned long bp = 0;  /*bit pointer in the "in" data, current byte is bp >> 3, current bit is bp & 0x7 (from lsb to msb of the byte) */
+    unsigned long pos = 0; /*byte position in the out buffer */
+
+    uint16_t done = 0;
+
+    while (done == 0)
+    {
+        uint16_t btype;
+
+        /* ensure next bit doesn't point past the end of the buffer */
+        if ((bp >> 3) >= insize)
+            return UPNG_EMALFORMED;
+
+        /* read block control bits */
+        done = read_bit(&bp, &in[inpos]);
+        btype = read_bit(&bp, &in[inpos]) | (read_bit(&bp, &in[inpos]) << 1);
+
+        /* process control type appropriateyly */
+        upng_error error;
+        if (btype == 3)
+            error = UPNG_EMALFORMED;
+        else if (btype == 0)
+            error = inflate_uncompressed(out, outsize, &in[inpos], &bp, &pos, insize); /*no compression */
+        else
+            error = inflate_huffman(out, outsize, &in[inpos], &bp, &pos, insize, btype); /*compression, btype 01 or 10 */
+
+        /* stop if an error has occured */
+        if (error != UPNG_EOK)
+            return error;
+    }
+
+    return UPNG_EOK;
+}
+
+extern upng_error uz_inflate(unsigned char *out, unsigned long outsize, const unsigned char *in, unsigned long insize)
+{
+    /* we require two bytes for the zlib data header */
+    if (insize < 2)
+        return UPNG_EMALFORMED;
+
+    /* 256 * in[0] + in[1] must be a multiple of 31, the FCHECK value is supposed to be made that way */
+    if ((in[0] * 256 + in[1]) % 31 != 0)
+        return UPNG_EMALFORMED;
+
+    /*error: only compression method 8: inflate with sliding window of 32k is supported by the PNG spec */
+    if ((in[0] & 15) != 8 || ((in[0] >> 4) & 15) > 7)
+        return UPNG_EMALFORMED;
+
+    /* the specification of PNG says about the zlib stream: "The additional flags shall not specify a preset dictionary." */
+    if (((in[1] >> 5) & 1) != 0)
+        return UPNG_EMALFORMED;
+
+    /* create output buffer */
+    uz_inflate_data(out, outsize, in, insize, 2);
+
     return UPNG_EOK;
 }
