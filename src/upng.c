@@ -28,18 +28,10 @@ freely, subject to the following restrictions:
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
-
 #include "upng.h"
 
-//smaller decompressor
-//saves about 900 bytes, but still crashing watch
-//#include "tinfl.h"
-//#define TINFL 1
-#include <pebble.h>
-
-//Debug stack overflow
-//register uint32_t sp __asm("sp");
-//static uint32_t bsp = 0x2001a26c; //stack grows downward from this
+extern unsigned char upng_read_bit(unsigned long *bitpointer, const unsigned char *bitstream);
+extern upng_error upng_inflate_huffman(unsigned char *out, unsigned long outsize, const unsigned char *in, unsigned long *bp, unsigned long *pos, unsigned long inlength, uint16_t btype);
 
 #define MAKE_BYTE(b) ((b) & 0xFF)
 #define MAKE_DWORD(a,b,c,d) ((MAKE_BYTE(a) << 24) | (MAKE_BYTE(b) << 16) | (MAKE_BYTE(c) << 8) | MAKE_BYTE(d))
@@ -182,8 +174,8 @@ static upng_error uz_inflate_data(upng_t* upng, unsigned char* out, unsigned lon
                 }
 
                 /* read block control bits */
-                done = read_bit(&bp, &in[inpos]);
-                btype = read_bit(&bp, &in[inpos]) | (read_bit(&bp, &in[inpos]) << 1);
+                done = upng_read_bit(&bp, &in[inpos]);
+                btype = upng_read_bit(&bp, &in[inpos]) | (upng_read_bit(&bp, &in[inpos]) << 1);
 
                 /* process control type appropriateyly */
                 if (btype == 3) {
@@ -192,14 +184,7 @@ static upng_error uz_inflate_data(upng_t* upng, unsigned char* out, unsigned lon
                 } else if (btype == 0) {
                         inflate_uncompressed(upng, out, outsize, &in[inpos], &bp, &pos, insize);	/*no compression */
                 } else {
-#ifndef TINFL
-    inflate_huffman(upng, out, outsize, &in[inpos], &bp, &pos, insize, btype);	/*compression, btype 01 or 10 */
-#else
-    tinfl_decompressor inflator;
-    tinfl_init(&inflator);
-    tinfl_decompress(&inflator, &in[inpos], (size_t*)&insize, out, out, (uint8_t*)&outsize, 0);
-                        inflate_uncompressed(upng, out, outsize, &in[inpos], &bp, &pos, insize);	/*no compression */
-#endif
+                    upng_inflate_huffman(out, outsize, &in[inpos], &bp, &pos, insize, btype);	/*compression, btype 01 or 10 */
                 }
 
                 /* stop if an error has occured */
