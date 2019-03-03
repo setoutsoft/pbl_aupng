@@ -78,8 +78,8 @@ typedef struct upng_text
 {
     char* buffer; // deallocate this
 
-    char *keyword; // but not these
-    char *text;
+    const char *keyword; // but not these
+    const char *text;
 } upng_text;
 
 struct upng_t
