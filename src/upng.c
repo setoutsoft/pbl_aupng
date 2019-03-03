@@ -73,13 +73,6 @@ typedef enum upng_color
     UPNG_RGBA = 6
 } upng_color;
 
-typedef struct upng_source
-{
-    unsigned char *buffer;
-    unsigned long size;
-    char owning;
-} upng_source;
-
 typedef struct upng_text
 {
     char *keyword;
@@ -367,14 +360,9 @@ static upng_format determine_format(upng_t *upng)
 
 static void upng_free_source(upng_t *upng)
 {
-    if (upng->source.owning != 0)
-    {
-        app_free((void *)upng->source.buffer);
-    }
-
-    upng->source.buffer = NULL;
-    upng->source.size = 0;
-    upng->source.owning = 0;
+    if (upng->source.free != NULL)
+        upng->source.free(upng->source.user);
+    memset(&upng->source, 0, sizeof(upng->source));
 }
 
 /*read the information from the header and store it in the upng_Info. return value is error*/
@@ -400,25 +388,32 @@ upng_error upng_header(upng_t *upng)
         SET_ERROR(upng, UPNG_ENOTPNG);
         return upng->error;
     }
+    unsigned char header[29];
+    if (upng->source.read(upng->source.user, 0, header, 29) != 29)
+    {
+        SET_ERROR(upng, UPNG_EREAD);
+        return upng->error;
+    }
+
     /* check that PNG header matches expected value */
-    if (upng->source.buffer[0] != 137 || upng->source.buffer[1] != 80 || upng->source.buffer[2] != 78 || upng->source.buffer[3] != 71 || upng->source.buffer[4] != 13 || upng->source.buffer[5] != 10 || upng->source.buffer[6] != 26 || upng->source.buffer[7] != 10)
+    if (header[0] != 137 || header[1] != 80 || header[2] != 78 || header[3] != 71 || header[4] != 13 || header[5] != 10 || header[6] != 26 || header[7] != 10)
     {
         SET_ERROR(upng, UPNG_ENOTPNG);
         return upng->error;
     }
 
     /* check that the first chunk is the IHDR chunk */
-    if (MAKE_DWORD_PTR(upng->source.buffer + 12) != CHUNK_IHDR)
+    if (MAKE_DWORD_PTR(header + 12) != CHUNK_IHDR)
     {
         SET_ERROR(upng, UPNG_EMALFORMED);
         return upng->error;
     }
 
     /* read the values given in the header */
-    upng->width = MAKE_DWORD_PTR(upng->source.buffer + 16);
-    upng->height = MAKE_DWORD_PTR(upng->source.buffer + 20);
-    upng->color_depth = upng->source.buffer[24];
-    upng->color_type = (upng_color)upng->source.buffer[25];
+    upng->width = MAKE_DWORD_PTR(header + 16);
+    upng->height = MAKE_DWORD_PTR(header + 20);
+    upng->color_depth = header[24];
+    upng->color_type = (upng_color)header[25];
 
     /* determine our color format */
     upng->format = determine_format(upng);
@@ -429,21 +424,21 @@ upng_error upng_header(upng_t *upng)
     }
 
     /* check that the compression method (byte 27) is 0 (only allowed value in spec) */
-    if (upng->source.buffer[26] != 0)
+    if (header[26] != 0)
     {
         SET_ERROR(upng, UPNG_EMALFORMED);
         return upng->error;
     }
 
     /* check that the compression method (byte 27) is 0 (only allowed value in spec) */
-    if (upng->source.buffer[27] != 0)
+    if (header[27] != 0)
     {
         SET_ERROR(upng, UPNG_EMALFORMED);
         return upng->error;
     }
 
     /* check that the compression method (byte 27) is 0 (spec allows 1, but uPNG does not support it) */
-    if (upng->source.buffer[28] != 0)
+    if (header[28] != 0)
     {
         SET_ERROR(upng, UPNG_EUNINTERLACED);
         return upng->error;
@@ -456,11 +451,12 @@ upng_error upng_header(upng_t *upng)
 /*read a PNG, the result will be in the same color type as the PNG (hence "generic")*/
 upng_error upng_decode(upng_t *upng)
 {
-    const unsigned char *chunk;
     unsigned char *compressed;
     unsigned char *inflated;
     unsigned long compressed_size = 0, compressed_index = 0;
     unsigned long inflated_size;
+    unsigned long chunk_offset;
+    unsigned char chunk_header[12];
     upng_error error;
 
     /* if we have an error state, bail now */
@@ -491,24 +487,31 @@ upng_error upng_decode(upng_t *upng)
     }
 
     /* first byte of the first chunk after the header */
-    chunk = upng->source.buffer + 33;
+    chunk_offset = 33;
 
     /* scan through the chunks, finding the size of all IDAT chunks, and also
         * verify general well-formed-ness */
-    while (chunk < upng->source.buffer + upng->source.size)
+    while (chunk_offset < upng->source.size)
     {
+        unsigned long chunk_data_offset = upng_chunk_data(chunk_offset);
         unsigned long length;
-        const unsigned char *data = chunk + 8; /*the data in the chunk */
 
         /* make sure chunk header is not larger than the total compressed */
-        if ((unsigned long)(chunk - upng->source.buffer + 12) > upng->source.size)
+        if (chunk_offset + 12 > upng->source.size)
         {
             SET_ERROR(upng, UPNG_EMALFORMED);
             return upng->error;
         }
 
+        /* read chunk header */
+        if (upng->source.read(upng->source.user, chunk_offset, chunk_header, 12) != 12)
+        {
+            SET_ERROR(upng, UPNG_EREAD);
+            return upng->error;
+        }
+
         /* get length; sanity check it */
-        length = upng_chunk_length(chunk);
+        length = upng_chunk_length(chunk_header);
         if (length > INT_MAX)
         {
             SET_ERROR(upng, UPNG_EMALFORMED);
@@ -516,27 +519,34 @@ upng_error upng_decode(upng_t *upng)
         }
 
         /* make sure chunk header+paylaod is not larger than the total compressed */
-        if ((unsigned long)(chunk - upng->source.buffer + length + 12) > upng->source.size)
+        if (chunk_offset + length + 12 > upng->source.size)
         {
             SET_ERROR(upng, UPNG_EMALFORMED);
             return upng->error;
         }
 
         /* parse chunks */
-        if (upng_chunk_type(chunk) == CHUNK_IDAT)
+        if (upng_chunk_type(chunk_header) == CHUNK_IDAT)
         {
             compressed_size += length;
         }
-        else if (upng_chunk_type(chunk) == CHUNK_IEND)
+        else if (upng_chunk_type(chunk_header) == CHUNK_IEND)
         {
             break;
         }
-        else if (upng_chunk_type(chunk) == CHUNK_OFFS)
+        else if (upng_chunk_type(chunk_header) == CHUNK_OFFS)
         {
+            unsigned char data[8];
+            if (upng->source.read(upng->source.user, chunk_data_offset, data, 8) != 8)
+            {
+                SET_ERROR(upng, UPNG_EREAD);
+                return upng->error;
+            }
+
             upng->x_offset = MAKE_DWORD_PTR(data);
             upng->y_offset = MAKE_DWORD_PTR(data + 4);
         }
-        else if (upng_chunk_type(chunk) == CHUNK_PLTE)
+        else if (upng_chunk_type(chunk_header) == CHUNK_PLTE)
         {
             upng->palette_entries = length / 3; // 3 bytes per color entry
             if (upng->palette)
@@ -545,9 +555,14 @@ upng_error upng_decode(upng_t *upng)
                 upng->palette = NULL;
             }
             upng->palette = app_malloc(length);
-            memcpy(upng->palette, data, length);
+
+            if (upng->source.read(upng->source.user, chunk_data_offset, upng->palette, length) != length)
+            {
+                SET_ERROR(upng, UPNG_EREAD);
+                return upng->error;
+            }
         }
-        else if (upng_chunk_type(chunk) == CHUNK_tRNS)
+        else if (upng_chunk_type(chunk_header) == CHUNK_tRNS)
         {
             upng->alpha_entries = length;
             if (upng->alpha)
@@ -556,11 +571,16 @@ upng_error upng_decode(upng_t *upng)
                 upng->alpha = NULL;
             }
             upng->alpha = app_malloc(length);
-            memcpy(upng->alpha, data, length);
+
+            if (upng->source.read(upng->source.user, chunk_data_offset, upng->alpha, length) != length)
+            {
+                SET_ERROR(upng, UPNG_EREAD);
+                return upng->error;
+            }
         }
-        else if (upng_chunk_type(chunk) == CHUNK_TEXT)
+        else if (upng_chunk_type(chunk_header) == CHUNK_TEXT)
         {
-            int keyword_length = (strlen((const char *)data) + 1);
+            /*int keyword_length = (strlen((const char *)data) + 1);
             // Copy keyword located at start of data (includes null terminator)
             upng->text[upng->text_count].keyword = app_malloc(keyword_length);
             strcpy(upng->text[upng->text_count].keyword, (const char *)data);
@@ -572,15 +592,16 @@ upng_error upng_decode(upng_t *upng)
             // add missing null terminator
             upng->text[upng->text_count].text[text_length - 1] = '\0';
 
-            upng->text_count++;
+            upng->text_count++;*/
+            // TODO: Reimplement with new source callbacks
         }
-        else if (upng_chunk_critical(chunk))
+        else if (upng_chunk_critical(chunk_header))
         {
             SET_ERROR(upng, UPNG_EUNSUPPORTED);
             return upng->error;
         }
 
-        chunk += upng_chunk_length(chunk) + 12;
+        chunk_offset += length + 12;
     }
 
     /* allocate enough space for the (compressed and filtered) image data */
@@ -593,33 +614,38 @@ upng_error upng_decode(upng_t *upng)
 
     /* scan through the chunks again, this time copying the values into
         * our compressed buffer.  there's no reason to validate anything a second time. */
-    chunk = upng->source.buffer + 33;
-    while (chunk < upng->source.buffer + upng->source.size)
+    chunk_offset = 33;
+    while (chunk_offset < upng->source.size)
     {
+        unsigned long chunk_data_offset = upng_chunk_data(chunk_offset);
         unsigned long length;
-        const unsigned char *data; /*the data in the chunk */
 
-        length = upng_chunk_length(chunk);
-        data = chunk + 8;
+        /* read chunk header */
+        if (upng->source.read(upng->source.user, chunk_offset, chunk_header, 12) != 12)
+        {
+            SET_ERROR(upng, UPNG_EREAD);
+            return upng->error;
+        }
+
+        length = upng_chunk_length(chunk_header);
 
         /* parse chunks */
-        if (upng_chunk_type(chunk) == CHUNK_IDAT)
+        if (upng_chunk_type(chunk_header) == CHUNK_IDAT)
         {
-            memcpy(compressed + compressed_index, data, length);
+            if (upng->source.read(upng->source.user, chunk_data_offset, compressed + compressed_index, length) != length)
+            {
+                SET_ERROR(upng, UPNG_EREAD);
+                return upng->error;
+            }
             compressed_index += length;
         }
-        else if (upng_chunk_type(chunk) == CHUNK_IEND)
+        else if (upng_chunk_type(chunk_header) == CHUNK_IEND)
         {
             break;
         }
 
-        chunk += upng_chunk_length(chunk) + 12;
+        chunk_offset += length + 12;
     }
-
-    // Pebble has only so much free ram, so free source buffer now that we are
-    // done with it.
-    app_free(upng->source.buffer);
-    upng->source.buffer = NULL;
 
     /* allocate space to store inflated (but still filtered) data */
     int width_aligned_bytes = (upng->width * upng_get_bpp(upng) + 7) / 8;
@@ -669,7 +695,7 @@ upng_error upng_decode(upng_t *upng)
     return upng->error;
 }
 
-static upng_t *upng_new(void)
+upng_t *upng_new_from_source(upng_source source)
 {
     upng_t *upng;
 
@@ -704,70 +730,95 @@ static upng_t *upng_new(void)
 
     upng->text_count = 0;
 
-    upng->source.buffer = NULL;
-    upng->source.size = 0;
-    upng->source.owning = 0;
+    upng->source = source;
 
     return upng;
+}
+
+typedef struct upng_byte_source_context
+{
+    void* buffer;
+    unsigned long size;
+} upng_byte_source_context;
+
+static unsigned long upng_byte_source_read(void* user, unsigned long offset, void* out_buffer, unsigned long read_size)
+{
+    upng_byte_source_context* context = (upng_byte_source_context*)user;
+    if (offset >= context->size)
+        return 0;
+
+    unsigned long bytes_to_copy = read_size;
+    if (offset + bytes_to_copy > context->size)
+        bytes_to_copy = context->size - offset;
+
+    memcpy(out_buffer, context->buffer + offset, bytes_to_copy);
+    return bytes_to_copy;
+}
+
+static void upng_byte_source_free(void* user)
+{
+    app_free(user);
 }
 
 upng_t *upng_new_from_bytes(unsigned char *raw_buffer, unsigned long size, uint8_t **out_buffer)
 {
-    upng_t *upng = upng_new();
-    if (upng == NULL)
-    {
+    upng_byte_source_context* context = (upng_byte_source_context*)app_malloc(sizeof(upng_byte_source_context));
+    if (context == NULL)
         return NULL;
-    }
+    context->buffer = raw_buffer;
+    context->size = size;
 
-    upng->source.buffer = raw_buffer;
-    upng->source.size = size;
-    upng->source.owning = 0;
-    //         *upng->buffer = out_buffer;
-    return upng;
+    return upng_new_from_source((upng_source) {
+        .user = context,
+        .size = size,
+        .read = upng_byte_source_read,
+        .free = upng_byte_source_free
+    });
 }
 
 #ifdef UPNG_USE_STDIO
+static unsigned long upng_file_source_read(void* user, unsigned long offset, void* out_buffer, unsigned long read_size)
+{
+    FILE* fp = (FILE*)user;
+    fseek(fp, 0, SEEK_END);
+    unsigned long size = ftell(fp);
+    if (offset >= size)
+        return 0;
+
+    unsigned long bytes_to_read = read_size;
+    if (offset + bytes_to_read > size)
+        bytes_to_read = size - offset;
+
+    fseek(fp, offset, SEEK_SET);
+    return fread(out_buffer, 1, bytes_to_read, fp);
+}
+
+static void upng_file_source_free(void* user)
+{
+    if (user != NULL)
+        fclose((FILE*)user);
+}
+
 upng_t *upng_new_from_file(const char *filename)
 {
-    upng_t *upng;
-    unsigned char *buffer;
-    FILE *file;
-    long size;
-
-    upng = upng_new();
+    FILE* fp = fopen(filename, "rb");
+    upng_t *upng = upng_new_from_source((upng_source) {
+        .user = fp,
+        .size = 0,
+        .read = upng_file_source_read,
+        .free = upng_file_source_free
+    });
     if (upng == NULL)
-    {
         return NULL;
-    }
 
-    file = fopen(filename, "rb");
-    if (file == NULL)
+    if (upng->source.user == NULL)
     {
         SET_ERROR(upng, UPNG_ENOTFOUND);
         return upng;
     }
 
-    /* get filesize */
-    fseek(file, 0, SEEK_END);
-    size = ftell(file);
-    rewind(file);
-
-    /* read contents of the file into the vector */
-    buffer = (unsigned char *)app_malloc((unsigned long)size);
-    if (buffer == NULL)
-    {
-        fclose(file);
-        SET_ERROR(upng, UPNG_ENOMEM);
-        return upng;
-    }
-    fread(buffer, 1, (unsigned long)size, file);
-    fclose(file);
-
-    /* set the read buffer as our source buffer, with owning flag set */
-    upng->source.buffer = buffer;
-    upng->source.size = size;
-    upng->source.owning = 1;
-
+    fseek(fp, 0, SEEK_END);
+    upng->source.size = ftell(fp);
     return upng;
 }
 #endif

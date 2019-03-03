@@ -37,7 +37,8 @@ typedef enum upng_error {
 	UPNG_EUNSUPPORTED	= 5, /* critical PNG chunk type is not supported */
 	UPNG_EUNINTERLACED	= 6, /* image interlacing is not supported */
 	UPNG_EUNFORMAT		= 7, /* image color format is not supported */
-	UPNG_EPARAM			= 8  /* invalid parameter to method call */
+	UPNG_EPARAM			= 8, /* invalid parameter to method call */
+    UPNG_EREAD          = 9  /* read callback did not return all data */
 } upng_error;
 
 typedef enum upng_format {
@@ -68,11 +69,21 @@ typedef struct __attribute__((__packed__)) rgb {
   unsigned char b;
 } rgb;
 
+typedef void (*upng_source_free_cb)(void* user);
+typedef unsigned long (*upng_source_read_cb)(void* user, unsigned long offset, void* buffer, unsigned long size);
+typedef struct upng_source
+{
+    void* user;
+    unsigned long size;
+    upng_source_free_cb free;
+    upng_source_read_cb read;
+} upng_source;
+
 #ifdef UPNG_USE_STDIO
-upng_t*		upng_new_from_file	(const char* path);
+upng_t*		upng_new_from_file	 (const char* path);
 #endif
-upng_t*		upng_new_from_bytes	(unsigned char* source_buffer, unsigned long source_size, unsigned char**buffer);
-void		upng_free			(upng_t* upng);
+upng_t*		upng_new_from_bytes	 (unsigned char* source_buffer, unsigned long source_size, unsigned char**buffer);
+upng_t*     upng_new_from_source (upng_source source);
 
 upng_error	upng_header			(upng_t* upng);
 upng_error	upng_decode			(upng_t* upng);
