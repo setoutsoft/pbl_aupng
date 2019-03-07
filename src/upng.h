@@ -88,7 +88,8 @@ upng_t*     upng_new_from_source (upng_source source);
 void		upng_free			 (upng_t* upng);
 
 upng_error	upng_header			 (upng_t* upng);
-upng_error	upng_decode			 (upng_t* upng);
+upng_error	upng_decode			 (upng_t* upng); // backwards-compatibility, shortcut for upng_decode_frame(0)
+upng_error  upng_decode_frame    (upng_t* upng, int frame_index);
 
 upng_error	upng_get_error		 (const upng_t* upng);
 unsigned	upng_get_error_line	 (const upng_t* upng);
@@ -101,6 +102,8 @@ unsigned	upng_get_bpp		 (const upng_t* upng);
 unsigned	upng_get_bitdepth	 (const upng_t* upng);
 unsigned	upng_get_components	 (const upng_t* upng);
 upng_format	upng_get_format		 (const upng_t* upng);
+unsigned    upng_get_frames      (const upng_t* upng);
+unsigned    upng_get_plays       (const upng_t* upng); // 0 means unlimited plays
 
 //returns count of entries in palette
 int         upng_get_palette(const upng_t* upng, rgb **palette);
