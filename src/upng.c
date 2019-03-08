@@ -851,7 +851,6 @@ upng_error upng_decode(upng_t *upng)
     /* allocate space to store inflated (but still filtered) data */
     int width_aligned_bytes = (upng->width * upng_get_bpp(upng) + 7) / 8;
     inflated_size = (width_aligned_bytes * upng->height) + upng->height; // pad byte
-                                                                         // Hard-codec CCM usage, avoid compositor buffer (ie. +32k to be safe)
     inflated = (unsigned char *)app_malloc(inflated_size);
     if (inflated == NULL)
     {
