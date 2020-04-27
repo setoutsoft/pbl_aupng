@@ -88,8 +88,8 @@ upng_t*     upng_new_from_source (upng_source source);
 void		upng_free			 (upng_t* upng);
 
 upng_error	upng_header			 (upng_t* upng);
-upng_error	upng_decode			 (upng_t* upng); // backwards-compatibility, shortcut for upng_decode_frame(0)
-upng_error  upng_decode_frame    (upng_t* upng, int frame_index);
+upng_error  upng_reset           (upng_t* upng);
+upng_error	upng_decode			 (upng_t* upng); // decodes the *next* frame
 
 upng_error	upng_get_error		 (const upng_t* upng);
 unsigned	upng_get_error_line	 (const upng_t* upng);
