@@ -941,6 +941,16 @@ void upng_free(upng_t *upng)
         UPNG_MEM_FREE(upng->alpha);
     }
 
+    if (upng->frames)
+    {
+        UPNG_MEM_FREE(upng->frames);
+    }
+
+    if (upng->buffer)
+    {
+        UPNG_MEM_FREE(upng->buffer);
+    }
+
     /* deallocate source buffer, if necessary */
     upng_free_source(upng);
 

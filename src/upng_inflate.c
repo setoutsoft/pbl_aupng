@@ -232,6 +232,7 @@ static upng_error get_tree_inflate_dynamic(huffman_tree *codetree, huffman_tree 
     uint16_t codelengthcode[NUM_CODE_LENGTH_CODES];
     uint16_t *bitlen = (uint16_t *)UPNG_MEM_ALLOC(sizeof(uint16_t) * NUM_DEFLATE_CODE_SYMBOLS);
     uint16_t bitlenD[NUM_DISTANCE_SYMBOLS];
+    upng_error error = UPNG_EOK;
 
     if (!bitlen)
         return UPNG_ENOMEM;
@@ -241,7 +242,7 @@ static upng_error get_tree_inflate_dynamic(huffman_tree *codetree, huffman_tree 
     /*make sure that length values that aren't filled in will be 0, or a wrong tree will be generated */
     /*C-code note: use no "return" between ctor and dtor of an uivector! */
     if ((*bp) >> 3 >= inlength - 2)
-        return UPNG_EMALFORMED;
+        goto emalformed;
 
     /* clear bitlen arrays */
     memset(bitlen, 0, sizeof(uint16_t) * NUM_DEFLATE_CODE_SYMBOLS);
@@ -264,11 +265,9 @@ static upng_error get_tree_inflate_dynamic(huffman_tree *codetree, huffman_tree 
         }
     }
 
-    upng_error error = huffman_tree_create_lengths(codelengthcodetree, codelengthcode);
-
-    /* bail now if we encountered an error earlier */
+    error = huffman_tree_create_lengths(codelengthcodetree, codelengthcode);
     if (error != UPNG_EOK)
-        return error;
+        goto exit;
 
     /*now we can use this tree to read the lengths for the tree that this function will return */
     i = 0;
@@ -276,7 +275,7 @@ static upng_error get_tree_inflate_dynamic(huffman_tree *codetree, huffman_tree 
     { /*i is the current symbol we're reading in the part that contains the code lengths of lit/len codes and dist codes */
         uint16_t code = huffman_decode_symbol(in, bp, codelengthcodetree, inlength);
         if (code == INVALID_CODE_INDEX)
-            return UPNG_EMALFORMED;
+            goto emalformed;
 
         if (code <= 15)
         { /*a length code */
@@ -296,7 +295,7 @@ static upng_error get_tree_inflate_dynamic(huffman_tree *codetree, huffman_tree 
             uint16_t value;         /*set value to the previous code */
 
             if ((*bp) >> 3 >= inlength)
-                return UPNG_EMALFORMED;
+                goto emalformed;
             /*error, bit pointer jumps past memory */
             replength += read_bits(bp, in, 2);
 
@@ -314,7 +313,7 @@ static upng_error get_tree_inflate_dynamic(huffman_tree *codetree, huffman_tree 
             {
                 /* i is larger than the amount of codes */
                 if (i >= hlit + hdist)
-                    return UPNG_EMALFORMED;
+                    goto emalformed;
 
                 if (i < hlit)
                 {
@@ -331,7 +330,7 @@ static upng_error get_tree_inflate_dynamic(huffman_tree *codetree, huffman_tree 
         {                           /*repeat "0" 3-10 times */
             uint16_t replength = 3; /*read in the bits that indicate repeat length */
             if ((*bp) >> 3 >= inlength)
-                return UPNG_EMALFORMED;
+                goto emalformed;
 
             /*error, bit pointer jumps past memory */
             replength += read_bits(bp, in, 3);
@@ -341,7 +340,7 @@ static upng_error get_tree_inflate_dynamic(huffman_tree *codetree, huffman_tree 
             {
                 /* error: i is larger than the amount of codes */
                 if (i >= hlit + hdist)
-                    return UPNG_EMALFORMED;
+                    goto emalformed;
 
                 if (i < hlit)
                 {
@@ -359,7 +358,7 @@ static upng_error get_tree_inflate_dynamic(huffman_tree *codetree, huffman_tree 
             uint16_t replength = 11; /*read in the bits that indicate repeat length */
             /* error, bit pointer jumps past memory */
             if ((*bp) >> 3 >= inlength)
-                return UPNG_EMALFORMED;
+                goto emalformed;
 
             replength += read_bits(bp, in, 7);
 
@@ -368,7 +367,7 @@ static upng_error get_tree_inflate_dynamic(huffman_tree *codetree, huffman_tree 
             {
                 /* i is larger than the amount of codes */
                 if (i >= hlit + hdist)
-                    return UPNG_EMALFORMED;
+                    goto emalformed;
                 if (i < hlit)
                     bitlen[i] = 0;
                 else
@@ -377,21 +376,26 @@ static upng_error get_tree_inflate_dynamic(huffman_tree *codetree, huffman_tree 
             }
         }
         else /* somehow an unexisting code appeared. This can never happen. */
-            return UPNG_EMALFORMED;
+            goto emalformed;
     }
 
     if (bitlen[256] == 0)
-        return UPNG_EMALFORMED;
+        goto emalformed;
 
     /*the length of the end code 256 must be larger than 0 */
     /*now we've finally got hlit and hdist, so generate the code trees, and the function is done */
     error = huffman_tree_create_lengths(codetree, bitlen);
     if (error != UPNG_EOK)
-        return error;
+        goto exit;
     error = huffman_tree_create_lengths(codetreeD, bitlenD);
-    if (error != UPNG_EOK)
-        return error;
+
+exit:
     UPNG_MEM_FREE(bitlen);
+    return error;
+
+emalformed:
+    error = UPNG_EMALFORMED;
+    goto exit;
 }
 
 /*inflate a block with dynamic of fixed Huffman tree*/
@@ -401,7 +405,7 @@ static upng_error inflate_huffman(unsigned char *out, unsigned long outsize, con
     uint16_t *codetree_buffer = (uint16_t *)UPNG_MEM_ALLOC(sizeof(uint16_t) * DEFLATE_CODE_BUFFER_SIZE);
     uint16_t codetreeD_buffer[DISTANCE_BUFFER_SIZE];
     if (codetree_buffer == NULL)
-        return UPNG_EMALFORMED;
+        return UPNG_ENOMEM;
     uint16_t done = 0;
 
     huffman_tree codetree;
@@ -431,7 +435,7 @@ static upng_error inflate_huffman(unsigned char *out, unsigned long outsize, con
     {
         uint16_t code = huffman_decode_symbol(in, bp, &codetree, inlength);
         if (code == INVALID_CODE_INDEX)
-            return UPNG_EMALFORMED;
+            goto emalformed;
 
         if (code == 256)
         {
@@ -442,7 +446,7 @@ static upng_error inflate_huffman(unsigned char *out, unsigned long outsize, con
         {
             /* literal symbol */
             if ((*pos) >= outsize)
-                return UPNG_EMALFORMED;
+                goto emalformed;
 
             /* store output */
             out[(*pos)++] = (unsigned char)(code);
@@ -459,17 +463,17 @@ static upng_error inflate_huffman(unsigned char *out, unsigned long outsize, con
 
             /* error, bit pointer will jump past memory */
             if (((*bp) >> 3) >= inlength)
-                return UPNG_EMALFORMED;
+                goto emalformed;
             length += read_bits(bp, in, numextrabits);
 
             /*part 3: get distance code */
             codeD = huffman_decode_symbol(in, bp, &codetreeD, inlength);
             if (codeD == INVALID_CODE_INDEX)
-                return UPNG_EMALFORMED;
+                goto emalformed;
 
             /* invalid distance code (30-31 are never used) */
             if (codeD > 29)
-                return UPNG_EMALFORMED;
+                goto emalformed;
 
             distance = DISTANCE_BASE[codeD];
 
@@ -478,7 +482,7 @@ static upng_error inflate_huffman(unsigned char *out, unsigned long outsize, con
 
             /* error, bit pointer will jump past memory */
             if (((*bp) >> 3) >= inlength)
-                return UPNG_EMALFORMED;
+                goto emalformed;
 
             distance += read_bits(bp, in, numextrabitsD);
 
@@ -487,7 +491,7 @@ static upng_error inflate_huffman(unsigned char *out, unsigned long outsize, con
             backward = start - distance;
 
             if ((*pos) + length > outsize)
-                return UPNG_EMALFORMED;
+                goto emalformed;
 
             for (forward = 0; forward < length; forward++)
             {
@@ -504,6 +508,10 @@ static upng_error inflate_huffman(unsigned char *out, unsigned long outsize, con
 
     UPNG_MEM_FREE(codetree_buffer);
     return UPNG_EOK;
+
+emalformed:
+    UPNG_MEM_FREE(codetree_buffer);
+    return UPNG_EMALFORMED;
 }
 
 static upng_error inflate_uncompressed(unsigned char *out, unsigned long outsize, const unsigned char *in, unsigned long *bp, unsigned long *pos, unsigned long inlength)
