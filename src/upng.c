@@ -24,12 +24,11 @@ freely, subject to the following restrictions:
                 3. This notice may not be removed or altered from any source
                 distribution.
 */
+#include "upng.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
-#include "upng.h"
 
 extern upng_error uz_inflate(unsigned char *out, unsigned long outsize, const unsigned char *in, unsigned long insize);
 
@@ -433,7 +432,7 @@ static void upng_free_source(upng_t *upng)
 /* creates a single frame intended for single image pngs */
 static void upng_setup_for_single_image(upng_t *upng)
 {
-    upng->frames = (upng_frame*)app_malloc(sizeof(upng_frame));
+    upng->frames = (upng_frame*)UPNG_MEM_ALLOC(sizeof(upng_frame));
     if (upng->frames == NULL)
     {
         SET_ERROR(upng, UPNG_ENOMEM);
@@ -527,7 +526,7 @@ static upng_error upng_process_chunks(upng_t* upng)
             upng->play_count = MAKE_DWORD_PTR(data);
 
             /* Allocate frames */
-            upng->frames = (upng_frame*)app_malloc(sizeof(upng_frame) * upng->frame_count);
+            upng->frames = (upng_frame*)UPNG_MEM_ALLOC(sizeof(upng_frame) * upng->frame_count);
             CHECK_RET(upng, upng->frames != NULL, UPNG_ENOMEM);
             memset(upng->frames, 0, sizeof(upng_frame) * upng->frame_count);
         }
@@ -577,10 +576,10 @@ static upng_error upng_process_chunks(upng_t* upng)
             upng->palette_entries = length / 3; // 3 bytes per color entry
             if (upng->palette)
             {
-                app_free(upng->palette);
+                UPNG_MEM_FREE(upng->palette);
                 upng->palette = NULL;
             }
-            upng->palette = app_malloc(length);
+            upng->palette = UPNG_MEM_ALLOC(length);
 
             CHECK_RET(upng, upng->source.read(upng->source.user, chunk_data_offset, upng->palette, length) == length, UPNG_EREAD);
         }
@@ -589,16 +588,16 @@ static upng_error upng_process_chunks(upng_t* upng)
             upng->alpha_entries = length;
             if (upng->alpha)
             {
-                app_free(upng->alpha);
+                UPNG_MEM_FREE(upng->alpha);
                 upng->alpha = NULL;
             }
-            upng->alpha = app_malloc(length);
+            upng->alpha = UPNG_MEM_ALLOC(length);
 
             CHECK_RET(upng, upng->source.read(upng->source.user, chunk_data_offset, upng->alpha, length) == length, UPNG_EREAD);
         }
         else if (upng_chunk_type(chunk_header) == CHUNK_TEXT)
         {
-            char* buffer = upng->text[upng->text_count].buffer = app_malloc(length + 1);
+            char* buffer = upng->text[upng->text_count].buffer = UPNG_MEM_ALLOC(length + 1);
             CHECK_RET(upng, buffer != NULL, UPNG_ENOMEM);
 
             CHECK_RET(upng, upng->source.read(upng->source.user, chunk_data_offset, buffer, length) == length, UPNG_EREAD);
@@ -710,7 +709,7 @@ upng_error upng_decode(upng_t *upng)
 
     /* allocate enough space for the (compressed and filtered) image data */
     const upng_frame* frame = upng->frames + upng->current_frame;
-    compressed = (unsigned char *)app_malloc(frame->compressed_size);
+    compressed = (unsigned char *)UPNG_MEM_ALLOC(frame->compressed_size);
     CHECK_RET(upng, compressed != NULL, UPNG_ENOMEM);
 
     /* scan through the chunks again, this time copying the values into
@@ -753,13 +752,13 @@ upng_error upng_decode(upng_t *upng)
     /* allocate space to store inflated (but still filtered) data */
     int width_aligned_bytes = (frame->width * upng_get_bpp(upng) + 7) / 8;
     inflated_size = (width_aligned_bytes * frame->height) + frame->height; // pad byte
-    inflated = (unsigned char *)app_malloc(inflated_size);
+    inflated = (unsigned char *)UPNG_MEM_ALLOC(inflated_size);
     CHECK_GOTO(upng, inflated != NULL, UPNG_ENOMEM, error);
 
     /* decompress image data */
     error = uz_inflate(inflated, inflated_size, compressed, frame->compressed_size);
     CHECK_GOTO(upng, error == UPNG_EOK, upng->error, error);
-    app_free(compressed);
+    UPNG_MEM_FREE(compressed);
 
     /* unfilter scanlines */
     post_process_scanlines(upng, inflated, inflated, frame);
@@ -768,7 +767,7 @@ upng_error upng_decode(upng_t *upng)
 
     if (upng->error != UPNG_EOK)
     {
-        app_free(upng->buffer);
+        UPNG_MEM_FREE(upng->buffer);
         upng->buffer = NULL;
         upng->size = 0;
     }
@@ -784,11 +783,11 @@ upng_error upng_decode(upng_t *upng)
 
 error:
     if (inflated != NULL)
-        app_free(inflated);
+        UPNG_MEM_FREE(inflated);
     if (compressed != NULL)
-        app_free(compressed);
+        UPNG_MEM_FREE(compressed);
     if (upng->buffer != NULL)
-        app_free(upng->buffer);
+        UPNG_MEM_FREE(upng->buffer);
     return upng->error;
 }
 
@@ -796,7 +795,7 @@ upng_t *upng_new_from_source(upng_source source)
 {
     upng_t *upng;
 
-    upng = (upng_t *)app_malloc(sizeof(upng_t));
+    upng = (upng_t *)UPNG_MEM_ALLOC(sizeof(upng_t));
     if (upng == NULL)
     {
         return NULL;
@@ -859,12 +858,12 @@ static unsigned long upng_byte_source_read(void* user, unsigned long offset, voi
 
 static void upng_byte_source_free(void* user)
 {
-    app_free(user);
+    UPNG_MEM_FREE(user);
 }
 
 upng_t *upng_new_from_bytes(unsigned char *raw_buffer, unsigned long size, uint8_t **out_buffer)
 {
-    upng_byte_source_context* context = (upng_byte_source_context*)app_malloc(sizeof(upng_byte_source_context));
+    upng_byte_source_context* context = (upng_byte_source_context*)UPNG_MEM_ALLOC(sizeof(upng_byte_source_context));
     if (context == NULL)
         return NULL;
     context->buffer = raw_buffer;
@@ -933,13 +932,13 @@ void upng_free(upng_t *upng)
     /* deallocate palette buffer, if necessary */
     if (upng->palette)
     {
-        app_free(upng->palette);
+        UPNG_MEM_FREE(upng->palette);
     }
 
     /* deallocate alpha buffer, we rolled all alphas into the palette */
     if (upng->alpha)
     {
-        app_free(upng->alpha);
+        UPNG_MEM_FREE(upng->alpha);
     }
 
     /* deallocate source buffer, if necessary */
@@ -948,12 +947,12 @@ void upng_free(upng_t *upng)
     if (upng->text_count)
     {
         for (unsigned int i = 0; i < upng->text_count; i++)
-            app_free(upng->text[i].buffer);
+            UPNG_MEM_FREE(upng->text[i].buffer);
     }
     upng->text_count = 0;
 
     /* deallocate struct itself */
-    app_free(upng);
+    UPNG_MEM_FREE(upng);
 }
 
 upng_error upng_get_error(const upng_t *upng)

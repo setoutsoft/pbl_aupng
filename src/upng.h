@@ -24,10 +24,13 @@ freely, subject to the following restrictions:
 		3. This notice may not be removed or altered from any source
 		distribution.
 */
+#pragma once
+#include "upng_config.h"
 
-#if !defined(UPNG_H)
-#define UPNG_H
-#include <pebble.h>
+#include <stdint.h>
+#ifdef UPNG_USE_STDIO
+#include <stdio.h>
+#endif
 
 typedef enum upng_error {
 	UPNG_EOK			= 0, /* success (no error) */
@@ -114,5 +117,3 @@ unsigned				upng_get_size		(const upng_t* upng);
 //returns keyword and text_out matching keyword
 const char* upng_get_text(const upng_t* upng, const char** text_out, unsigned int index);
 int         upng_get_alpha(const upng_t* upng, uint8_t **alpha);
-
-#endif /*defined(UPNG_H)*/

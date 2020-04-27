@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <limits.h>
@@ -120,7 +120,7 @@ static void huffman_tree_init(huffman_tree *tree, uint16_t *buffer, uint16_t num
 /*given the code lengths (as stored in the PNG file), generate the tree as defined by Deflate. maxbitlen is the maximum bits that a code in the tree can have. return value is error.*/
 static upng_error huffman_tree_create_lengths(huffman_tree *tree, const uint16_t *bitlen)
 {
-    uint16_t *tree1d = app_malloc(sizeof(uint16_t) * MAX_SYMBOLS);
+    uint16_t *tree1d = UPNG_MEM_ALLOC(sizeof(uint16_t) * MAX_SYMBOLS);
     uint16_t blcount[MAX_BIT_LENGTH];
     uint16_t nextcode[MAX_BIT_LENGTH];
     if (!tree1d)
@@ -199,7 +199,7 @@ static upng_error huffman_tree_create_lengths(huffman_tree *tree, const uint16_t
             tree->tree2d[n] = 0; /*remove possible remaining 32767's */
         }
     }
-    app_free(tree1d);
+    UPNG_MEM_FREE(tree1d);
 }
 
 static uint16_t huffman_decode_symbol(const unsigned char *in, unsigned long *bp, const huffman_tree *codetree, unsigned long inlength)
@@ -230,7 +230,7 @@ static uint16_t huffman_decode_symbol(const unsigned char *in, unsigned long *bp
 static upng_error get_tree_inflate_dynamic(huffman_tree *codetree, huffman_tree *codetreeD, huffman_tree *codelengthcodetree, const unsigned char *in, unsigned long *bp, unsigned long inlength)
 {
     uint16_t codelengthcode[NUM_CODE_LENGTH_CODES];
-    uint16_t *bitlen = (uint16_t *)app_malloc(sizeof(uint16_t) * NUM_DEFLATE_CODE_SYMBOLS);
+    uint16_t *bitlen = (uint16_t *)UPNG_MEM_ALLOC(sizeof(uint16_t) * NUM_DEFLATE_CODE_SYMBOLS);
     uint16_t bitlenD[NUM_DISTANCE_SYMBOLS];
 
     if (!bitlen)
@@ -391,14 +391,14 @@ static upng_error get_tree_inflate_dynamic(huffman_tree *codetree, huffman_tree 
     error = huffman_tree_create_lengths(codetreeD, bitlenD);
     if (error != UPNG_EOK)
         return error;
-    app_free(bitlen);
+    UPNG_MEM_FREE(bitlen);
 }
 
 /*inflate a block with dynamic of fixed Huffman tree*/
 static upng_error inflate_huffman(unsigned char *out, unsigned long outsize, const unsigned char *in, unsigned long *bp, unsigned long *pos, unsigned long inlength, uint16_t btype)
 {
     // Converted to malloc, was overflowing 2k stack on Pebble
-    uint16_t *codetree_buffer = (uint16_t *)app_malloc(sizeof(uint16_t) * DEFLATE_CODE_BUFFER_SIZE);
+    uint16_t *codetree_buffer = (uint16_t *)UPNG_MEM_ALLOC(sizeof(uint16_t) * DEFLATE_CODE_BUFFER_SIZE);
     uint16_t codetreeD_buffer[DISTANCE_BUFFER_SIZE];
     if (codetree_buffer == NULL)
         return UPNG_EMALFORMED;
@@ -502,7 +502,7 @@ static upng_error inflate_huffman(unsigned char *out, unsigned long outsize, con
         }
     }
 
-    app_free(codetree_buffer);
+    UPNG_MEM_FREE(codetree_buffer);
     return UPNG_EOK;
 }
 
