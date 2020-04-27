@@ -1,7 +1,7 @@
 cmake_minimum_required (VERSION 3.10 FATAL_ERROR)
 project(aupng)
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 
 ###################################################################
 # googletest
@@ -48,10 +48,10 @@ add_library(aupng
     src/upng.h
     src/upng.c
     src/upng_inflate.c
-    src/pebble.h
+    src/upng_config.h
 )
 target_include_directories(aupng
-    SYSTEM PUBLIC src
+    PUBLIC src
 )
 
 ###################################################################
@@ -59,6 +59,9 @@ target_include_directories(aupng
 ###################################################################
 
 add_executable(test_aupng
+    test/DebugAllocator.hpp
+    test/DebugAllocator.cpp
+
     test/test_single_picture.cpp
 )
 target_link_libraries(test_aupng
