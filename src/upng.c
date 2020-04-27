@@ -59,6 +59,24 @@ extern upng_error uz_inflate(unsigned char *out, unsigned long outsize, const un
         (upng)->error_line = __LINE__; \
     } while (0)
 
+#define CHECK_RET(upng, condition, errorCode)   \
+    do                                          \
+    {                                           \
+        if (!(condition)) {                     \
+            SET_ERROR((upng), (errorCode));     \
+            return (upng)->error;               \
+        }                                       \
+    } while(0)
+
+#define CHECK_GOTO(upng, condition, errorCode, label)   \
+    do                                                  \
+    {                                                   \
+        if (!(condition)) {                             \
+            SET_ERROR((upng), (errorCode));             \
+            goto label;                                 \
+        }                                               \
+    } while(0)
+
 #define upng_chunk_length(chunk) MAKE_DWORD_PTR(chunk)
 #define upng_chunk_type(chunk) MAKE_DWORD_PTR((chunk) + 4)
 #define upng_chunk_data(chunk) ((chunk) + 8)
@@ -453,43 +471,23 @@ static upng_error upng_process_chunks(upng_t* upng)
         unsigned long length;
 
         /* make sure chunk header is not larger than the total compressed */
-        if (chunk_offset + 12 > upng->source.size)
-        {
-            SET_ERROR(upng, UPNG_EMALFORMED);
-            return upng->error;
-        }
+        CHECK_RET(upng, chunk_offset + 12 <= upng->source.size, UPNG_EMALFORMED);
 
         /* read chunk header */
-        if (upng->source.read(upng->source.user, chunk_offset, chunk_header, 12) != 12)
-        {
-            SET_ERROR(upng, UPNG_EREAD);
-            return upng->error;
-        }
+        CHECK_RET(upng, upng->source.read(upng->source.user, chunk_offset, chunk_header, 12) == 12, UPNG_EREAD);
 
         /* get length; sanity check it */
         length = upng_chunk_length(chunk_header);
-        if (length > INT_MAX)
-        {
-            SET_ERROR(upng, UPNG_EMALFORMED);
-            return upng->error;
-        }
+        CHECK_RET(upng, length < INT_MAX, UPNG_EMALFORMED);
 
         /* make sure chunk header+paylaod is not larger than the total compressed */
-        if (chunk_offset + length + 12 > upng->source.size)
-        {
-            SET_ERROR(upng, UPNG_EMALFORMED);
-            return upng->error;
-        }
+        CHECK_RET(upng, chunk_offset + length + 12 <= upng->source.size, UPNG_EMALFORMED);
 
         /* parse chunks */
         if (upng_chunk_type(chunk_header) == CHUNK_IDAT)
         {
             /* make sure no IDAT chunk comes after a fcTL chunk */
-            if (cur_frame_index != FRAME_INDEX_NONE && cur_frame_index != 0)
-            {
-                SET_ERROR(upng, UPNG_EMALFORMED);
-                return upng->error;
-            }
+            CHECK_RET(upng, cur_frame_index == FRAME_INDEX_NONE || cur_frame_index == 0, UPNG_EMALFORMED);
 
             /* check if this is a non-animated png */
             if (upng->frames == NULL)
@@ -509,65 +507,41 @@ static upng_error upng_process_chunks(upng_t* upng)
         else if (upng_chunk_type(chunk_header) == CHUNK_FDAT)
         {
             /* make sure the acTL chunk was already processed at this point */
-            if (upng->frames == NULL)
-            {
-                SET_ERROR(upng, UPNG_EMALFORMED);
-                return upng->error;
-            }
+            CHECK_RET(upng, upng->frames != NULL, UPNG_EMALFORMED);
 
             upng_frame* frame = &upng->frames[cur_frame_index];
             frame->compressed_size += length;
             if (frame->data_chunk_offset == 0)
                 frame->data_chunk_offset = chunk_offset;
         }
-        else if (upng_chunk_type(chunk_header) == CHUNK_IEND)
-        {
-            break;
-        }
         else if (upng_chunk_type(chunk_header) == CHUNK_ACTL)
         {
             /* make sure the acTL chunk is present only once and before the first IDAT */
-            if (upng->frames != NULL)
-            {
-                SET_ERROR(upng, UPNG_EMALFORMED);
-                return upng->error;
-            }
+            CHECK_RET(upng, upng->frames == NULL, UPNG_EMALFORMED);
 
             unsigned char data[8];
-            if (upng->source.read(upng->source.user, chunk_data_offset, data, 8) != 8)
-            {
-                SET_ERROR(upng, UPNG_EREAD);
-                return upng->error;
-            }
+            CHECK_RET(upng, upng->source.read(upng->source.user, chunk_data_offset, data, 8) == 8, UPNG_EREAD);
 
             upng->frame_count = MAKE_DWORD_PTR(data);
             upng->play_count = MAKE_DWORD_PTR(data);
 
             /* Allocate frames */
             upng->frames = (upng_frame*)app_malloc(sizeof(upng_frame) * upng->frame_count);
-            if (upng->frames == NULL)
-            {
-                SET_ERROR(upng, UPNG_ENOMEM);
-                return upng->error;
-            }
+            CHECK_RET(upng, upng->frames != NULL, UPNG_ENOMEM);
             memset(upng->frames, 0, sizeof(upng_frame) * upng->frame_count);
         }
         else if (upng_chunk_type(chunk_header) == CHUNK_FCTL)
         {
+            /* contrary to specs acTL *has* to come before the first fcTL chunk */
+            CHECK_RET(upng, upng->frames != NULL, UPNG_EUNSUPPORTED);
+
             unsigned char data[26];
-            if (upng->source.read(upng->source.user, chunk_data_offset, data, 26) != 26)
-            {
-                SET_ERROR(upng, UPNG_EREAD);
-                return upng->error;
-            }
+            CHECK_RET(upng, upng->source.read(upng->source.user, chunk_data_offset, data, 26) == 26, UPNG_EREAD);
 
             /* make sure the fcTL chunks are in order */
             unsigned int stated_frame_index = MAKE_DWORD_PTR(data);
-            if (stated_frame_index != cur_frame_index + 1)
-            {
-                SET_ERROR(upng, UPNG_EMALFORMED);
-                return upng->error;
-            }
+            CHECK_RET(upng, stated_frame_index == cur_frame_index + 1, UPNG_EMALFORMED);
+            CHECK_RET(upng, stated_frame_index < upng->frame_count, UPNG_EMALFORMED);
             cur_frame_index++;
 
             /* read data into frame structure */
@@ -583,27 +557,16 @@ static upng_error upng_process_chunks(upng_t* upng)
             frame->compressed_size = 0;
 
             /* validate data */
-            if (frame->width == 0 || frame->offset_x + frame->width > upng->width ||
-                frame->height == 0 || frame->offset_y + frame->height > upng->height)
-            {
-                SET_ERROR(upng, UPNG_EMALFORMED);
-                return upng->error;
+            CHECK_RET(upng, frame->width > 0 && frame->height > 0, UPNG_EMALFORMED);
+            CHECK_RET(upng, frame->offset_x + frame->width <= upng->width, UPNG_EMALFORMED);
+            CHECK_RET(upng, frame->offset_y + frame->height <= upng->height, UPNG_EMALFORMED);
+            CHECK_RET(upng, frame->dispose_op <= UPNG_LAST_DISPOSE_OP, UPNG_EUNSUPPORTED);
+            CHECK_RET(upng, frame->blend_op <= UPNG_LAST_BLEND_OP, UPNG_EUNSUPPORTED);
             }
-
-            if (frame->dispose_op > UPNG_LAST_DISPOSE_OP || frame->blend_op > UPNG_LAST_BLEND_OP)
-            {
-                SET_ERROR(upng, UPNG_EUNSUPPORTED);
-                return upng->error;
-            }
-        }
         else if (upng_chunk_type(chunk_header) == CHUNK_OFFS)
         {
             unsigned char data[8];
-            if (upng->source.read(upng->source.user, chunk_data_offset, data, 8) != 8)
-            {
-                SET_ERROR(upng, UPNG_EREAD);
-                return upng->error;
-            }
+            CHECK_RET(upng, upng->source.read(upng->source.user, chunk_data_offset, data, 8) == 8, UPNG_EREAD);
 
             upng->x_offset = MAKE_DWORD_PTR(data);
             upng->y_offset = MAKE_DWORD_PTR(data + 4);
@@ -618,12 +581,8 @@ static upng_error upng_process_chunks(upng_t* upng)
             }
             upng->palette = app_malloc(length);
 
-            if (upng->source.read(upng->source.user, chunk_data_offset, upng->palette, length) != length)
-            {
-                SET_ERROR(upng, UPNG_EREAD);
-                return upng->error;
+            CHECK_RET(upng, upng->source.read(upng->source.user, chunk_data_offset, upng->palette, length) == length, UPNG_EREAD);
             }
-        }
         else if (upng_chunk_type(chunk_header) == CHUNK_tRNS)
         {
             upng->alpha_entries = length;
@@ -634,44 +593,32 @@ static upng_error upng_process_chunks(upng_t* upng)
             }
             upng->alpha = app_malloc(length);
 
-            if (upng->source.read(upng->source.user, chunk_data_offset, upng->alpha, length) != length)
-            {
-                SET_ERROR(upng, UPNG_EREAD);
-                return upng->error;
+            CHECK_RET(upng, upng->source.read(upng->source.user, chunk_data_offset, upng->alpha, length) == length, UPNG_EREAD);
             }
-        }
         else if (upng_chunk_type(chunk_header) == CHUNK_TEXT)
         {
             char* buffer = upng->text[upng->text_count].buffer = app_malloc(length + 1);
-            if (buffer == NULL)
-            {
-                SET_ERROR(upng, UPNG_ENOMEM);
-                return upng->error;
-            }
+            CHECK_RET(upng, buffer != NULL, UPNG_ENOMEM);
 
-            if (upng->source.read(upng->source.user, chunk_data_offset, buffer, length) != length)
-            {
-                SET_ERROR(upng, UPNG_EREAD);
-                return upng->error;
-            }
+            CHECK_RET(upng, upng->source.read(upng->source.user, chunk_data_offset, buffer, length) == length, UPNG_EREAD);
 
             // Split into keyword and text (separated by null byte)
             char* terminator = (char*)memchr(buffer, '\0', length);
-            if (terminator == NULL)
-            {
-                SET_ERROR(upng, UPNG_EMALFORMED);
-                return upng->error;
-            }
+            CHECK_RET(upng, terminator != NULL, UPNG_EMALFORMED);
+
             upng->text[upng->text_count].keyword = buffer;
             upng->text[upng->text_count].text = terminator + 1;
             buffer[length] = '\0';
 
             upng->text_count++;
         }
-        else if (upng_chunk_critical(chunk_header))
+        else if (upng_chunk_type(chunk_header) == CHUNK_IEND)
         {
-            SET_ERROR(upng, UPNG_EUNSUPPORTED);
-            return upng->error;
+            break;
+        }
+        else
+        {
+            CHECK_RET(upng, !upng_chunk_critical(chunk_header), UPNG_EUNSUPPORTED);
         }
 
         chunk_offset += length + 12;
@@ -698,31 +645,16 @@ upng_error upng_header(upng_t *upng)
     /* minimum length of a valid PNG file is 29 bytes
         * FIXME: verify this against the specification, or
         * better against the actual code below */
-    if (upng->source.size < 29)
-    {
-        SET_ERROR(upng, UPNG_ENOTPNG);
-        return upng->error;
-    }
     unsigned char header[29];
-    if (upng->source.read(upng->source.user, 0, header, 29) != 29)
-    {
-        SET_ERROR(upng, UPNG_EREAD);
-        return upng->error;
-    }
+    CHECK_RET(upng, upng->source.size >= 29, UPNG_ENOTPNG);
+    CHECK_RET(upng, upng->source.read(upng->source.user, 0, header, 29) == 29, UPNG_EREAD);
 
     /* check that PNG header matches expected value */
-    if (header[0] != 137 || header[1] != 80 || header[2] != 78 || header[3] != 71 || header[4] != 13 || header[5] != 10 || header[6] != 26 || header[7] != 10)
-    {
-        SET_ERROR(upng, UPNG_ENOTPNG);
-        return upng->error;
-    }
+    static const unsigned char PNG_HEADER[] = { 137, 80, 78, 71, 13, 10, 26, 10 };
+    CHECK_RET(upng, memcmp(header, PNG_HEADER, sizeof(PNG_HEADER)) == 0, UPNG_ENOTPNG);
 
     /* check that the first chunk is the IHDR chunk */
-    if (MAKE_DWORD_PTR(header + 12) != CHUNK_IHDR)
-    {
-        SET_ERROR(upng, UPNG_EMALFORMED);
-        return upng->error;
-    }
+    CHECK_RET(upng, MAKE_DWORD_PTR(header + 12) == CHUNK_IHDR, UPNG_EMALFORMED);
 
     /* read the values given in the header */
     upng->width = MAKE_DWORD_PTR(header + 16);
@@ -732,32 +664,16 @@ upng_error upng_header(upng_t *upng)
 
     /* determine our color format */
     upng->format = determine_format(upng);
-    if (upng->format == UPNG_BADFORMAT)
-    {
-        SET_ERROR(upng, UPNG_EUNFORMAT);
-        return upng->error;
-    }
+    CHECK_RET(upng, upng->format != UPNG_BADFORMAT, UPNG_EUNFORMAT);
 
     /* check that the compression method (byte 27) is 0 (only allowed value in spec) */
-    if (header[26] != 0)
-    {
-        SET_ERROR(upng, UPNG_EMALFORMED);
-        return upng->error;
-    }
+    CHECK_RET(upng, header[26] == 0, UPNG_EMALFORMED);
 
-    /* check that the compression method (byte 27) is 0 (only allowed value in spec) */
-    if (header[27] != 0)
-    {
-        SET_ERROR(upng, UPNG_EMALFORMED);
-        return upng->error;
-    }
+    /* check that the filter method (byte 27) is 0 (only allowed value in spec) */
+    CHECK_RET(upng, header[27] == 0, UPNG_EMALFORMED);
 
-    /* check that the compression method (byte 27) is 0 (spec allows 1, but uPNG does not support it) */
-    if (header[28] != 0)
-    {
-        SET_ERROR(upng, UPNG_EUNINTERLACED);
-        return upng->error;
-    }
+    /* check that the interlace method (byte 27) is 0 (spec allows 1, meaning Adam7, but uPNG does not support it) */
+    CHECK_RET(upng, header[28] == 0, UPNG_EUNINTERLACED);
 
     if (upng_process_chunks(upng) != UPNG_EOK)
         return upng->error;
@@ -830,10 +746,12 @@ upng_error upng_decode(upng_t *upng)
 
         length = upng_chunk_length(chunk_header);
 
-        /* parse chunks */
+        /* collect data chunks */
         if (upng_chunk_type(chunk_header) == CHUNK_IDAT)
         {
-            if (upng->source.read(upng->source.user, chunk_data_offset, compressed + compressed_index, length) != length)
+            CHECK_GOTO(upng, upng->source.read(upng->source.user, chunk_data_offset, compressed + compressed_index, length) == length, UPNG_EREAD, error);
+            compressed_index += length;
+        }
             {
                 SET_ERROR(upng, UPNG_EREAD);
                 return upng->error;
@@ -852,31 +770,17 @@ upng_error upng_decode(upng_t *upng)
     int width_aligned_bytes = (upng->width * upng_get_bpp(upng) + 7) / 8;
     inflated_size = (width_aligned_bytes * upng->height) + upng->height; // pad byte
     inflated = (unsigned char *)app_malloc(inflated_size);
-    if (inflated == NULL)
-    {
-        app_free(compressed);
-        SET_ERROR(upng, UPNG_ENOMEM);
-        return upng->error;
-    }
+    CHECK_GOTO(upng, inflated != NULL, UPNG_ENOMEM, error);
 
     /* decompress image data */
-    error = uz_inflate(inflated, inflated_size, compressed, compressed_size);
-    if (error != UPNG_EOK)
-    {
-        app_free(inflated);
-        app_free(compressed);
-        return upng->error;
-    }
-
-    /* free the compressed compressed data */
+    error = uz_inflate(inflated, inflated_size, compressed, frame->compressed_size);
+    CHECK_GOTO(upng, error == UPNG_EOK, upng->error, error);
     app_free(compressed);
-
-    /* allocate final image buffer */
-    upng->size = width_aligned_bytes * upng->height;
 
     /* unfilter scanlines */
     post_process_scanlines(upng, inflated, inflated, upng);
     upng->buffer = inflated;
+    upng->size = width_aligned_bytes * upng->height;
 
     if (upng->error != UPNG_EOK)
     {
@@ -892,6 +796,15 @@ upng_error upng_decode(upng_t *upng)
     /* we are done with our input buffer; free it if we own it */
     upng_free_source(upng);
 
+    return upng->error;
+
+error:
+    if (inflated != NULL)
+        app_free(inflated);
+    if (compressed != NULL)
+        app_free(compressed);
+    if (upng->buffer != NULL)
+        app_free(upng->buffer);
     return upng->error;
 }
 
