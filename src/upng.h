@@ -47,10 +47,10 @@ typedef enum upng_error {
 
 typedef enum upng_format {
 	UPNG_BADFORMAT,
-  UPNG_INDEXED1,
-  UPNG_INDEXED2,
-  UPNG_INDEXED4,
-  UPNG_INDEXED8,
+  	UPNG_INDEXED1,
+  	UPNG_INDEXED2,
+  	UPNG_INDEXED4,
+  	UPNG_INDEXED8,
 	UPNG_RGB8,
 	UPNG_RGB16,
 	UPNG_RGBA8,
@@ -67,14 +67,22 @@ typedef enum upng_format {
 
 typedef struct upng_t upng_t;
 
-typedef struct __attribute__((__packed__)) rgb {
+typedef struct upng_rect
+{
+	int x_offset;
+	int y_offset;
+	unsigned width;
+	unsigned height;
+} upng_rect;
+
+typedef struct __attribute__((__packed__)) upng_rgb {
   unsigned char r;
   unsigned char g;
   unsigned char b;
-} rgb;
+} upng_rgb;
 
-typedef void (*upng_source_free_cb)(void* user);
-typedef unsigned long (*upng_source_read_cb)(void* user, unsigned long offset, void* buffer, unsigned long size);
+typedef void 			(*upng_source_free_cb)	(void* user);
+typedef unsigned long 	(*upng_source_read_cb)	(void* user, unsigned long offset, void* buffer, unsigned long size);
 typedef struct upng_source
 {
     void* user;
@@ -84,37 +92,35 @@ typedef struct upng_source
 } upng_source;
 
 #ifdef UPNG_USE_STDIO
-upng_t*		upng_new_from_file	 (const char* path);
+upng_t*			upng_new_from_file	 		(const char* path);
 #endif
-upng_t*		upng_new_from_bytes	 (unsigned char* source_buffer, unsigned long source_size, unsigned char**buffer);
-upng_t*     upng_new_from_source (upng_source source);
-void		upng_free			 (upng_t* upng);
+upng_t*			upng_new_from_bytes	 		(unsigned char* source_buffer, unsigned long source_size, unsigned char**buffer);
+upng_t*     	upng_new_from_source 		(upng_source source);
+void			upng_free			 		(upng_t* upng);
 
-upng_error	upng_header			 (upng_t* upng);
-upng_error  upng_reset           (upng_t* upng);
-upng_error	upng_decode			 (upng_t* upng); // decodes the *next* frame
+upng_error		upng_header			 		(upng_t* upng);
+upng_error  	upng_reset           		(upng_t* upng);
+// decodes the *next* frame
+upng_error		upng_decode			 		(upng_t* upng);
+// moves ownership out of upng
+uint8_t*		upng_move_frame_buffer		(upng_t* upng); 
 
-upng_error	upng_get_error		 (const upng_t* upng);
-unsigned	upng_get_error_line	 (const upng_t* upng);
-
-unsigned	upng_get_width		 (const upng_t* upng);
-unsigned	upng_get_height		 (const upng_t* upng);
-int	        upng_get_x_offset	 (const upng_t* upng);
-int	        upng_get_y_offset	 (const upng_t* upng);
-unsigned	upng_get_bpp		 (const upng_t* upng);
-unsigned	upng_get_bitdepth	 (const upng_t* upng);
-unsigned	upng_get_components	 (const upng_t* upng);
-upng_format	upng_get_format		 (const upng_t* upng);
-unsigned    upng_get_frames      (const upng_t* upng);
-unsigned    upng_get_plays       (const upng_t* upng); // 0 means unlimited plays
-
+upng_error		upng_get_error		 		(const upng_t* upng);
+unsigned		upng_get_error_line	 		(const upng_t* upng);
+void			upng_get_rect		 		(const upng_t* upng, upng_rect* rect);
+void			upng_get_frame_rect  		(const upng_t* upng, upng_rect* rect);
+unsigned		upng_get_frame_index 		(const upng_t* upng);
+unsigned		upng_get_bpp		 		(const upng_t* upng);
+unsigned		upng_get_bitdepth	 		(const upng_t* upng);
+unsigned		upng_get_components	 		(const upng_t* upng);
+upng_format		upng_get_format		 		(const upng_t* upng);
+unsigned    	upng_get_frames      		(const upng_t* upng);
+// 0 means unlimited plays
+unsigned    	upng_get_plays       		(const upng_t* upng);
 //returns count of entries in palette
-int         upng_get_palette(const upng_t* upng, rgb **palette);
-
-unsigned char*			upng_move_buffer	(upng_t* upng); // moves ownership out of upng
-const unsigned char*	upng_get_buffer		(const upng_t* upng);
-unsigned				upng_get_size		(const upng_t* upng);
-
+int         	upng_get_palette			(const upng_t* upng, upng_rgb **palette);
+int         	upng_get_alpha				(const upng_t* upng, uint8_t **alpha);
+const uint8_t*	upng_get_frame_buffer		(const upng_t* upng);
+unsigned		upng_get_frame_buffer_size	(const upng_t* upng);
 //returns keyword and text_out matching keyword
-const char* upng_get_text(const upng_t* upng, const char** text_out, unsigned int index);
-int         upng_get_alpha(const upng_t* upng, uint8_t **alpha);
+const char* 	upng_get_text				(const upng_t* upng, const char** text_out, unsigned int index);

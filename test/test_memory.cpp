@@ -23,7 +23,7 @@ TEST_F(Memory, GetBuffer)
     ASSERT_NE(nullptr, png);
     ASSERT_EQ(UPNG_EOK, upng_decode(png));
 
-    const auto buffer = upng_get_buffer(png);
+    const auto buffer = upng_get_frame_buffer(png);
     ASSERT_NE(nullptr, png);
     
     upng_free(png);
@@ -37,7 +37,7 @@ TEST_F(Memory, MoveBuffer)
     ASSERT_NE(nullptr, png);
     ASSERT_EQ(UPNG_EOK, upng_decode(png));
 
-    auto buffer = upng_move_buffer(png);
+    auto buffer = upng_move_frame_buffer(png);
     ASSERT_NE(nullptr, png);
     
     upng_free(png);

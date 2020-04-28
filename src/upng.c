@@ -117,10 +117,7 @@ typedef enum upng_blend_op
 
 typedef struct upng_frame
 {
-    unsigned int width;
-    unsigned int height;
-    unsigned int offset_x;
-    unsigned int offset_y;
+    upng_rect rect;
     unsigned short delay_numerator;
     unsigned short delay_denominator;
     upng_dispose_op dispose_op;
@@ -140,13 +137,9 @@ typedef struct upng_text
 
 struct upng_t
 {
-    unsigned width;
-    unsigned height;
+    upng_rect rect;
 
-    int x_offset;
-    int y_offset;
-
-    rgb *palette;
+    upng_rgb *palette;
     unsigned char palette_entries;
 
     uint8_t *alpha;
@@ -324,8 +317,8 @@ static void remove_padding_bits(unsigned char *out, const unsigned char *in, uns
 static void post_process_scanlines(upng_t *upng, unsigned char *out, unsigned char *in, const upng_frame *frame)
 {
     unsigned bpp = upng_get_bpp(upng);
-    unsigned w = frame->width;
-    unsigned h = frame->height;
+    unsigned w = frame->rect.width;
+    unsigned h = frame->rect.height;
 
     if (bpp == 0)
     {
@@ -441,10 +434,10 @@ static void upng_setup_for_single_image(upng_t *upng)
 
     upng->frame_count = 1;
     upng->play_count = 0;
-    upng->frames[0].width = upng->width;
-    upng->frames[0].height = upng->height;
-    upng->frames[0].offset_x = 0;
-    upng->frames[0].offset_y = 0;
+    upng->frames[0].rect.width = upng->rect.width;
+    upng->frames[0].rect.height = upng->rect.height;
+    upng->frames[0].rect.x_offset = 0;
+    upng->frames[0].rect.y_offset = 0;
     upng->frames[0].delay_numerator = 0;
     upng->frames[0].delay_denominator = 0;
     upng->frames[0].dispose_op = UPNG_DISPOSE_OP_NONE;
@@ -546,10 +539,10 @@ static upng_error upng_process_chunks(upng_t* upng)
 
             /* read data into frame structure */
             upng_frame* frame = &upng->frames[cur_frame_index];
-            frame->width = MAKE_DWORD_PTR(data + 4);
-            frame->height = MAKE_DWORD_PTR(data + 8);
-            frame->offset_x = MAKE_DWORD_PTR(data + 12);
-            frame->offset_y = MAKE_DWORD_PTR(data + 16);
+            frame->rect.width = MAKE_DWORD_PTR(data + 4);
+            frame->rect.height = MAKE_DWORD_PTR(data + 8);
+            frame->rect.x_offset = MAKE_DWORD_PTR(data + 12);
+            frame->rect.y_offset = MAKE_DWORD_PTR(data + 16);
             frame->delay_numerator = MAKE_WORD_PTR(data + 20);
             frame->delay_denominator = MAKE_WORD_PTR(data + 22);
             frame->dispose_op = (upng_dispose_op)data[24];
@@ -557,9 +550,10 @@ static upng_error upng_process_chunks(upng_t* upng)
             frame->compressed_size = 0;
 
             /* validate data */
-            CHECK_RET(upng, frame->width > 0 && frame->height > 0, UPNG_EMALFORMED);
-            CHECK_RET(upng, frame->offset_x + frame->width <= upng->width, UPNG_EMALFORMED);
-            CHECK_RET(upng, frame->offset_y + frame->height <= upng->height, UPNG_EMALFORMED);
+            CHECK_RET(upng, frame->rect.x_offset >= 0 && frame->rect.y_offset >= 0, UPNG_EMALFORMED);
+            CHECK_RET(upng, frame->rect.width > 0 && frame->rect.height > 0, UPNG_EMALFORMED);
+            CHECK_RET(upng, frame->rect.x_offset + frame->rect.width <= upng->rect.width, UPNG_EMALFORMED);
+            CHECK_RET(upng, frame->rect.y_offset + frame->rect.height <= upng->rect.height, UPNG_EMALFORMED);
             CHECK_RET(upng, frame->dispose_op <= UPNG_LAST_DISPOSE_OP, UPNG_EUNSUPPORTED);
             CHECK_RET(upng, frame->blend_op <= UPNG_LAST_BLEND_OP, UPNG_EUNSUPPORTED);
         }
@@ -568,8 +562,8 @@ static upng_error upng_process_chunks(upng_t* upng)
             unsigned char data[8];
             CHECK_RET(upng, upng->source.read(upng->source.user, chunk_data_offset, data, 8) == 8, UPNG_EREAD);
 
-            upng->x_offset = MAKE_DWORD_PTR(data);
-            upng->y_offset = MAKE_DWORD_PTR(data + 4);
+            upng->rect.x_offset = MAKE_DWORD_PTR(data);
+            upng->rect.y_offset = MAKE_DWORD_PTR(data + 4);
         }
         else if (upng_chunk_type(chunk_header) == CHUNK_PLTE)
         {
@@ -657,8 +651,8 @@ upng_error upng_header(upng_t *upng)
     CHECK_RET(upng, MAKE_DWORD_PTR(header + 12) == CHUNK_IHDR, UPNG_EMALFORMED);
 
     /* read the values given in the header */
-    upng->width = MAKE_DWORD_PTR(header + 16);
-    upng->height = MAKE_DWORD_PTR(header + 20);
+    upng->rect.width = MAKE_DWORD_PTR(header + 16);
+    upng->rect.height = MAKE_DWORD_PTR(header + 20);
     upng->color_depth = header[24];
     upng->color_type = (upng_color)header[25];
 
@@ -750,8 +744,8 @@ upng_error upng_decode(upng_t *upng)
     }
 
     /* allocate space to store inflated (but still filtered) data */
-    int width_aligned_bytes = (frame->width * upng_get_bpp(upng) + 7) / 8;
-    inflated_size = (width_aligned_bytes * frame->height) + frame->height; // pad byte
+    int width_aligned_bytes = (frame->rect.width * upng_get_bpp(upng) + 7) / 8;
+    inflated_size = (width_aligned_bytes * frame->rect.height) + frame->rect.height; // pad byte
     inflated = (unsigned char *)UPNG_MEM_ALLOC(inflated_size);
     CHECK_GOTO(upng, inflated != NULL, UPNG_ENOMEM, error);
 
@@ -763,7 +757,7 @@ upng_error upng_decode(upng_t *upng)
     /* unfilter scanlines */
     post_process_scanlines(upng, inflated, inflated, frame);
     upng->buffer = inflated;
-    upng->size = width_aligned_bytes * frame->height;
+    upng->size = width_aligned_bytes * frame->rect.height;
 
     if (upng->error != UPNG_EOK)
     {
@@ -804,10 +798,8 @@ upng_t *upng_new_from_source(upng_source source)
     upng->buffer = NULL;
     upng->size = 0;
 
-    upng->width = upng->height = 0;
-
-    upng->x_offset = 0;
-    upng->y_offset = 0;
+    upng->rect.width = upng->rect.height = 0;
+    upng->rect.x_offset = upng->rect.y_offset = 0;
 
     upng->palette = NULL;
     upng->palette_entries = 0;
@@ -975,27 +967,23 @@ unsigned upng_get_error_line(const upng_t *upng)
     return upng->error_line;
 }
 
-unsigned upng_get_width(const upng_t *upng)
+void upng_get_rect(const upng_t *upng, upng_rect *rect)
 {
-    return upng->width;
+    *rect = upng->rect;
 }
 
-unsigned upng_get_height(const upng_t *upng)
+void upng_get_frame_rect(const upng_t *upng, upng_rect *rect)
 {
-    return upng->height;
+    if (upng->frames != NULL)
+        *rect = upng->frames[upng->current_frame].rect;
 }
 
-int upng_get_x_offset(const upng_t *upng)
+unsigned upng_get_frame_index(const upng_t *upng)
 {
-    return upng->x_offset;
+    return upng->current_frame;
 }
 
-int upng_get_y_offset(const upng_t *upng)
-{
-    return upng->y_offset;
-}
-
-int upng_get_palette(const upng_t *upng, rgb **palette)
+int upng_get_palette(const upng_t *upng, upng_rgb **palette)
 {
     *palette = upng->palette;
     return upng->palette_entries;
@@ -1051,19 +1039,19 @@ const char* upng_get_text(const upng_t *upng, const char **text_out, unsigned in
     return NULL;
 }
 
-const unsigned char *upng_get_buffer(const upng_t *upng)
+const unsigned char *upng_get_frame_buffer(const upng_t *upng)
 {
     return upng->buffer;
 }
 
-unsigned char* upng_move_buffer(upng_t *upng)
+unsigned char* upng_move_frame_buffer(upng_t *upng)
 {
     unsigned char* buffer = upng->buffer;
     upng->buffer = NULL;
     return buffer;
 }
 
-unsigned upng_get_size(const upng_t *upng)
+unsigned upng_get_frame_buffer_size(const upng_t *upng)
 {
     return upng->size;
 }
