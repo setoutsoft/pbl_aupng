@@ -19,7 +19,7 @@ protected:
 
 TEST_F(Memory, GetBuffer)
 {
-    upng_t *png = upng_new_from_file("test/resources/checker_8bit.png");
+    upng_t *png = upng_new_from_file("test/resources/checker_24bit.png");
     ASSERT_NE(nullptr, png);
     ASSERT_EQ(UPNG_EOK, upng_decode(png));
 
@@ -33,7 +33,7 @@ TEST_F(Memory, GetBuffer)
 
 TEST_F(Memory, MoveBuffer)
 {
-    upng_t *png = upng_new_from_file("test/resources/checker_8bit.png");
+    upng_t *png = upng_new_from_file("test/resources/checker_24bit.png");
     ASSERT_NE(nullptr, png);
     ASSERT_EQ(UPNG_EOK, upng_decode(png));
 

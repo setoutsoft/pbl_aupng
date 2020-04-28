@@ -50,7 +50,12 @@ DebugAllocator::~DebugAllocator() noexcept(false)
     if (parent != nullptr)
         parent->unregisterChild(this);
     else if (!known_blocks.empty())
-        throw std::runtime_error("Memory leak! Parent debug allocator still has memory blocks");
+    {
+        // don't throw, this only messes up googletest
+        // instead have tests that check for memory leaks
+        for (auto& block : known_blocks)
+            delete[] block.start;
+    }
 }
 
 void* DebugAllocator::allocate(size_t size, const char* file, int line)

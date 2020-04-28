@@ -5,7 +5,7 @@ extern "C" {
 
 class SinglePicture : public ::testing::Test {};
 
-TEST_F(SinglePicture, Load8Bit)
+TEST_F(SinglePicture, Load24Bit)
 {
     static const uint8_t pixels[] = {
         0xff, 0xff, 0xff,
@@ -13,7 +13,7 @@ TEST_F(SinglePicture, Load8Bit)
         0xff, 0x00, 0x00,
         0x00, 0xff, 0x00
     };
-    upng_t *png = upng_new_from_file("test/resources/checker_8bit.png");
+    upng_t *png = upng_new_from_file("test/resources/checker_24bit.png");
     ASSERT_NE(nullptr, png);
     ASSERT_EQ(UPNG_EOK, upng_get_error(png));
 

@@ -918,9 +918,6 @@ upng_t *upng_new_from_file(const char *filename)
 
 void upng_free(upng_t *upng)
 {
-    /* We don't deallocate upng->buffer, because that gets handed off to the
-     * user (in this case, png_to_gbitmap).  */
-
     /* deallocate palette buffer, if necessary */
     if (upng->palette)
     {
