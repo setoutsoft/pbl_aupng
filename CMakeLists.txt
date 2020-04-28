@@ -46,8 +46,10 @@ include(GoogleTest)
 
 add_library(aupng
     src/upng.h
+    src/upng_internal.h
     src/upng.c
     src/upng_inflate.c
+    src/upng_decode.c
     src/upng_config.h
 )
 target_include_directories(aupng
