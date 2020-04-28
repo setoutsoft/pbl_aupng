@@ -30,7 +30,7 @@ freely, subject to the following restrictions:
 #include <string.h>
 #include <limits.h>
 
-extern upng_error uz_inflate(unsigned char *out, unsigned long outsize, const unsigned char *in, unsigned long insize);
+extern upng_error uz_inflate(uint8_t *out, unsigned long outsize, const uint8_t *in, unsigned long insize);
 
 #define MAKE_BYTE(b) ((b)&0xFF)
 #define MAKE_WORD(a, b) ((MAKE_BYTE(a) << 8) | MAKE_BYTE(b))
@@ -140,16 +140,16 @@ struct upng_t
     upng_rect rect;
 
     upng_rgb *palette;
-    unsigned char palette_entries;
+    uint8_t palette_entries;
 
     uint8_t *alpha;
-    unsigned char alpha_entries;
+    uint8_t alpha_entries;
 
     upng_color color_type;
     unsigned color_depth;
     upng_format format;
 
-    unsigned char *buffer;
+    uint8_t *buffer;
     unsigned long size;
 
     unsigned int play_count;
@@ -183,7 +183,7 @@ static int paeth_predictor(int a, int b, int c)
         return c;
 }
 
-static void unfilter_scanline(upng_t *upng, unsigned char *recon, const unsigned char *scanline, const unsigned char *precon, unsigned long bytewidth, unsigned char filterType, unsigned long length)
+static void unfilter_scanline(upng_t *upng, uint8_t *recon, const uint8_t *scanline, const uint8_t *precon, unsigned long bytewidth, uint8_t filterType, unsigned long length)
 {
     /*
         For PNG filter method 0
@@ -234,16 +234,16 @@ static void unfilter_scanline(upng_t *upng, unsigned char *recon, const unsigned
         if (precon)
         {
             for (i = 0; i < bytewidth; i++)
-                recon[i] = (unsigned char)(scanline[i] + paeth_predictor(0, precon[i], 0));
+                recon[i] = (uint8_t)(scanline[i] + paeth_predictor(0, precon[i], 0));
             for (i = bytewidth; i < length; i++)
-                recon[i] = (unsigned char)(scanline[i] + paeth_predictor(recon[i - bytewidth], precon[i], precon[i - bytewidth]));
+                recon[i] = (uint8_t)(scanline[i] + paeth_predictor(recon[i - bytewidth], precon[i], precon[i - bytewidth]));
         }
         else
         {
             for (i = 0; i < bytewidth; i++)
                 recon[i] = scanline[i];
             for (i = bytewidth; i < length; i++)
-                recon[i] = (unsigned char)(scanline[i] + paeth_predictor(recon[i - bytewidth], 0, 0));
+                recon[i] = (uint8_t)(scanline[i] + paeth_predictor(recon[i - bytewidth], 0, 0));
         }
         break;
     default:
@@ -252,7 +252,7 @@ static void unfilter_scanline(upng_t *upng, unsigned char *recon, const unsigned
     }
 }
 
-static void unfilter(upng_t *upng, unsigned char *out, const unsigned char *in, unsigned w, unsigned h, unsigned bpp)
+static void unfilter(upng_t *upng, uint8_t *out, const uint8_t *in, unsigned w, unsigned h, unsigned bpp)
 {
     /*
         For PNG filter method 0
@@ -263,7 +263,7 @@ static void unfilter(upng_t *upng, unsigned char *out, const unsigned char *in, 
         */
 
     unsigned y;
-    unsigned char *prevline = 0;
+    uint8_t *prevline = 0;
 
     unsigned long bytewidth = (bpp + 7) / 8; /*bytewidth is used for filtering, is 1 when bpp < 8, number of bytes per pixel otherwise */
     unsigned long linebytes = (w * bpp + 7) / 8;
@@ -272,7 +272,7 @@ static void unfilter(upng_t *upng, unsigned char *out, const unsigned char *in, 
     {
         unsigned long outindex = linebytes * y;
         unsigned long inindex = (1 + linebytes) * y; /*the extra filterbyte added to each row */
-        unsigned char filterType = in[inindex];
+        uint8_t filterType = in[inindex];
 
         unfilter_scanline(upng, &out[outindex], &in[inindex + 1], prevline, bytewidth, filterType, linebytes);
         if (upng->error != UPNG_EOK)
@@ -284,7 +284,7 @@ static void unfilter(upng_t *upng, unsigned char *out, const unsigned char *in, 
     }
 }
 
-static void remove_padding_bits(unsigned char *out, const unsigned char *in, unsigned long olinebits, unsigned long ilinebits, unsigned h)
+static void remove_padding_bits(uint8_t *out, const uint8_t *in, unsigned long olinebits, unsigned long ilinebits, unsigned h)
 {
     /*
         After filtering there are still padding bpp if scanlines have non multiple of 8 bit amounts. They need to be removed (except at last scanline of (Adam7-reduced) image) before working with pure image buffers for the Adam7 code, the color convert code and the output to the user.
@@ -300,11 +300,11 @@ static void remove_padding_bits(unsigned char *out, const unsigned char *in, uns
         unsigned long x;
         for (x = 0; x < olinebits; x++)
         {
-            unsigned char bit = (unsigned char)((in[(ibp) >> 3] >> (7 - ((ibp)&0x7))) & 1);
+            uint8_t bit = (uint8_t)((in[(ibp) >> 3] >> (7 - ((ibp)&0x7))) & 1);
             ibp++;
 
             if (bit == 0)
-                out[(obp) >> 3] &= (unsigned char)(~(1 << (7 - ((obp)&0x7))));
+                out[(obp) >> 3] &= (uint8_t)(~(1 << (7 - ((obp)&0x7))));
             else
                 out[(obp) >> 3] |= (1 << (7 - ((obp)&0x7)));
             ++obp;
@@ -314,7 +314,7 @@ static void remove_padding_bits(unsigned char *out, const unsigned char *in, uns
 }
 
 /*out must be buffer big enough to contain full image, and in must contain the full decompressed data from the IDAT chunks*/
-static void post_process_scanlines(upng_t *upng, unsigned char *out, unsigned char *in, const upng_frame *frame)
+static void post_process_scanlines(upng_t *upng, uint8_t *out, uint8_t *in, const upng_frame *frame)
 {
     unsigned bpp = upng_get_bpp(upng);
     unsigned w = frame->rect.width;
@@ -450,7 +450,7 @@ static void upng_setup_for_single_image(upng_t *upng)
 static upng_error upng_process_chunks(upng_t* upng)
 {
     unsigned long chunk_offset;
-    unsigned char chunk_header[12];
+    uint8_t chunk_header[12];
     unsigned int cur_frame_index = FRAME_INDEX_NONE;
 
     /* first byte of the first chunk after the header */
@@ -512,7 +512,7 @@ static upng_error upng_process_chunks(upng_t* upng)
             /* make sure the acTL chunk is present only once and before the first IDAT */
             CHECK_RET(upng, upng->frames == NULL, UPNG_EMALFORMED);
 
-            unsigned char data[8];
+            uint8_t data[8];
             CHECK_RET(upng, upng->source.read(upng->source.user, chunk_data_offset, data, 8) == 8, UPNG_EREAD);
 
             upng->frame_count = MAKE_DWORD_PTR(data);
@@ -528,7 +528,7 @@ static upng_error upng_process_chunks(upng_t* upng)
             /* contrary to specs acTL *has* to come before the first fcTL chunk */
             CHECK_RET(upng, upng->frames != NULL, UPNG_EUNSUPPORTED);
 
-            unsigned char data[26];
+            uint8_t data[26];
             CHECK_RET(upng, upng->source.read(upng->source.user, chunk_data_offset, data, 26) == 26, UPNG_EREAD);
 
             /* make sure the fcTL chunks are in order */
@@ -559,7 +559,7 @@ static upng_error upng_process_chunks(upng_t* upng)
         }
         else if (upng_chunk_type(chunk_header) == CHUNK_OFFS)
         {
-            unsigned char data[8];
+            uint8_t data[8];
             CHECK_RET(upng, upng->source.read(upng->source.user, chunk_data_offset, data, 8) == 8, UPNG_EREAD);
 
             upng->rect.x_offset = MAKE_DWORD_PTR(data);
@@ -639,12 +639,12 @@ upng_error upng_header(upng_t *upng)
     /* minimum length of a valid PNG file is 29 bytes
         * FIXME: verify this against the specification, or
         * better against the actual code below */
-    unsigned char header[29];
+    uint8_t header[29];
     CHECK_RET(upng, upng->source.size >= 29, UPNG_ENOTPNG);
     CHECK_RET(upng, upng->source.read(upng->source.user, 0, header, 29) == 29, UPNG_EREAD);
 
     /* check that PNG header matches expected value */
-    static const unsigned char PNG_HEADER[] = { 137, 80, 78, 71, 13, 10, 26, 10 };
+    static const uint8_t PNG_HEADER[] = { 137, 80, 78, 71, 13, 10, 26, 10 };
     CHECK_RET(upng, memcmp(header, PNG_HEADER, sizeof(PNG_HEADER)) == 0, UPNG_ENOTPNG);
 
     /* check that the first chunk is the IHDR chunk */
@@ -679,12 +679,12 @@ upng_error upng_header(upng_t *upng)
 /*read a PNG, the result will be in the same color type as the PNG (hence "generic")*/
 upng_error upng_decode(upng_t *upng)
 {
-    unsigned char *compressed = NULL;
-    unsigned char *inflated = NULL;
+    uint8_t *compressed = NULL;
+    uint8_t *inflated = NULL;
     unsigned long compressed_index = 0;
     unsigned long inflated_size;
     unsigned long chunk_offset;
-    unsigned char chunk_header[12];
+    uint8_t chunk_header[12];
     unsigned int fdat_sequence = 0;
     upng_error error;
 
@@ -703,7 +703,7 @@ upng_error upng_decode(upng_t *upng)
 
     /* allocate enough space for the (compressed and filtered) image data */
     const upng_frame* frame = upng->frames + upng->current_frame;
-    compressed = (unsigned char *)UPNG_MEM_ALLOC(frame->compressed_size);
+    compressed = (uint8_t *)UPNG_MEM_ALLOC(frame->compressed_size);
     CHECK_RET(upng, compressed != NULL, UPNG_ENOMEM);
 
     /* scan through the chunks again, this time copying the values into
@@ -746,7 +746,7 @@ upng_error upng_decode(upng_t *upng)
     /* allocate space to store inflated (but still filtered) data */
     int width_aligned_bytes = (frame->rect.width * upng_get_bpp(upng) + 7) / 8;
     inflated_size = (width_aligned_bytes * frame->rect.height) + frame->rect.height; // pad byte
-    inflated = (unsigned char *)UPNG_MEM_ALLOC(inflated_size);
+    inflated = (uint8_t *)UPNG_MEM_ALLOC(inflated_size);
     CHECK_GOTO(upng, inflated != NULL, UPNG_ENOMEM, error);
 
     /* decompress image data */
@@ -853,7 +853,7 @@ static void upng_byte_source_free(void* user)
     UPNG_MEM_FREE(user);
 }
 
-upng_t *upng_new_from_bytes(unsigned char *raw_buffer, unsigned long size, uint8_t **out_buffer)
+upng_t *upng_new_from_bytes(uint8_t *raw_buffer, unsigned long size, uint8_t **out_buffer)
 {
     upng_byte_source_context* context = (upng_byte_source_context*)UPNG_MEM_ALLOC(sizeof(upng_byte_source_context));
     if (context == NULL)
@@ -1036,14 +1036,14 @@ const char* upng_get_text(const upng_t *upng, const char **text_out, unsigned in
     return NULL;
 }
 
-const unsigned char *upng_get_frame_buffer(const upng_t *upng)
+const uint8_t *upng_get_frame_buffer(const upng_t *upng)
 {
     return upng->buffer;
 }
 
-unsigned char* upng_move_frame_buffer(upng_t *upng)
+uint8_t* upng_move_frame_buffer(upng_t *upng)
 {
-    unsigned char* buffer = upng->buffer;
+    uint8_t* buffer = upng->buffer;
     upng->buffer = NULL;
     return buffer;
 }
