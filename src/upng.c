@@ -1056,6 +1056,13 @@ const unsigned char *upng_get_buffer(const upng_t *upng)
     return upng->buffer;
 }
 
+unsigned char* upng_move_buffer(upng_t *upng)
+{
+    unsigned char* buffer = upng->buffer;
+    upng->buffer = NULL;
+    return buffer;
+}
+
 unsigned upng_get_size(const upng_t *upng)
 {
     return upng->size;

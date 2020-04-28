@@ -18,6 +18,10 @@ extern "C"
         return global_debug_allocator.deallocate(ptr);
     }
 }
+DebugAllocator* DebugAllocator::GetGlobalInstance()
+{
+    return &global_debug_allocator;
+}
 
 DebugAllocator::Block::Block(std::byte* _start, size_t _size, const char* _file, int _line) :
     start(_start), size(_size), file(_file), line(_line) {}

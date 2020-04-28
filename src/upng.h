@@ -111,6 +111,7 @@ unsigned    upng_get_plays       (const upng_t* upng); // 0 means unlimited play
 //returns count of entries in palette
 int         upng_get_palette(const upng_t* upng, rgb **palette);
 
+unsigned char*			upng_move_buffer	(upng_t* upng); // moves ownership out of upng
 const unsigned char*	upng_get_buffer		(const upng_t* upng);
 unsigned				upng_get_size		(const upng_t* upng);
 

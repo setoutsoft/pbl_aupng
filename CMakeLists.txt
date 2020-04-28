@@ -63,6 +63,7 @@ add_executable(test_aupng
     test/DebugAllocator.cpp
 
     test/test_single_picture.cpp
+    test/test_memory.cpp
 )
 target_link_libraries(test_aupng
     PRIVATE aupng
