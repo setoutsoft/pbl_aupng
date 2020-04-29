@@ -226,6 +226,8 @@ static upng_error huffman_tree_create_lengths(huffman_tree *tree, const uint16_t
         }
     }
     UPNG_MEM_FREE(tree1d);
+
+    return UPNG_EOK;
 }
 
 static uint16_t huffman_decode_symbol(const unsigned char *in, unsigned long *bp, const huffman_tree *codetree, unsigned long inlength)
