@@ -454,7 +454,9 @@ static upng_error inflate_huffman(unsigned char *out, unsigned long outsize, con
         huffman_tree_init(&codetreeD, codetreeD_buffer, NUM_DISTANCE_SYMBOLS, DISTANCE_BITLEN);
         huffman_tree_init(&codelengthcodetree, codelengthcodetree_buffer, NUM_CODE_LENGTH_CODES, CODE_LENGTH_BITLEN);
 
-        get_tree_inflate_dynamic(&codetree, &codetreeD, &codelengthcodetree, in, bp, inlength);
+        upng_error error = get_tree_inflate_dynamic(&codetree, &codetreeD, &codelengthcodetree, in, bp, inlength);
+        if (error != UPNG_EOK)
+            goto emalformed;
     }
 
     while (done == 0)
@@ -636,7 +638,5 @@ extern upng_error uz_inflate(unsigned char *out, unsigned long outsize, const un
         return UPNG_EMALFORMED;
 
     /* create output buffer */
-    uz_inflate_data(out, outsize, in, insize, 2);
-
-    return UPNG_EOK;
+    return uz_inflate_data(out, outsize, in, insize, 2);
 }

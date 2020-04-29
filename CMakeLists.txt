@@ -63,9 +63,11 @@ target_include_directories(aupng
 add_executable(test_aupng
     test/DebugAllocator.hpp
     test/DebugAllocator.cpp
+    test/test_common.hpp
 
     test/test_single_picture.cpp
     test/test_memory.cpp
+    test/test_multiple_frames.cpp
 )
 target_link_libraries(test_aupng
     PRIVATE aupng

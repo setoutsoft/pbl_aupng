@@ -108,36 +108,13 @@ static void upng_free_source(upng_t *upng)
     memset(&upng->source, 0, sizeof(upng->source));
 }
 
-/* creates a single frame intended for single image pngs */
-static void upng_setup_for_single_image(upng_t *upng)
-{
-    upng->frames = (upng_frame*)UPNG_MEM_ALLOC(sizeof(upng_frame));
-    if (upng->frames == NULL)
-    {
-        SET_ERROR(upng, UPNG_ENOMEM);
-        return;
-    }
-
-    upng->frame_count = 1;
-    upng->play_count = 0;
-    upng->frames[0].rect.width = upng->rect.width;
-    upng->frames[0].rect.height = upng->rect.height;
-    upng->frames[0].rect.x_offset = 0;
-    upng->frames[0].rect.y_offset = 0;
-    upng->frames[0].delay_numerator = 0;
-    upng->frames[0].delay_denominator = 0;
-    upng->frames[0].dispose_op = UPNG_DISPOSE_OP_NONE;
-    upng->frames[0].blend_op = UPNG_BLEND_OP_SOURCE;
-    upng->frames[0].compressed_size = 0;
-    upng->frames[0].data_chunk_offset = 0;
-}
-
 /*search through the chunks, save information like palette, frames and texts*/
 static upng_error upng_process_chunks(upng_t* upng)
 {
     unsigned long chunk_offset;
     uint8_t chunk_header[12];
     unsigned int cur_frame_index = FRAME_INDEX_NONE;
+    unsigned int next_sequence_number = 0;
 
     /* first byte of the first chunk after the header */
     chunk_offset = 33;
@@ -168,25 +145,28 @@ static upng_error upng_process_chunks(upng_t* upng)
             /* make sure no IDAT chunk comes after a fcTL chunk */
             CHECK_RET(upng, cur_frame_index == FRAME_INDEX_NONE || cur_frame_index == 0, UPNG_EMALFORMED);
 
-            /* check if this is a non-animated png */
-            if (upng->frames == NULL)
+            if (upng->defaultImage.data_chunk_offset == 0)
             {
-                upng_setup_for_single_image(upng);
-                if (upng->error != UPNG_EOK)
-                    return upng->error;
+                upng->defaultImage.data_chunk_offset = chunk_offset;
             }
+            upng->defaultImage.compressed_size += length;
 
-            upng_frame* frame = &upng->frames[
-                cur_frame_index == FRAME_INDEX_NONE ? 0 : cur_frame_index
-            ];
-            frame->compressed_size += length;
-            if (frame->data_chunk_offset == 0)
-                frame->data_chunk_offset = chunk_offset;
+            /* is the main image also the first animation frame? */
+            if (cur_frame_index == 0)
+            {
+                upng->frames[0] = upng->defaultImage;
+            }
         }
         else if (upng_chunk_type(chunk_header) == CHUNK_FDAT)
         {
             /* make sure the acTL chunk was already processed at this point */
             CHECK_RET(upng, upng->frames != NULL, UPNG_EMALFORMED);
+
+            /* check sequence number */
+            uint8_t sequence_number[4];
+            CHECK_RET(upng, upng->source.read(upng->source.user, chunk_data_offset, sequence_number, 4) == 4, UPNG_EREAD);
+            CHECK_RET(upng, next_sequence_number == MAKE_DWORD_PTR(sequence_number), UPNG_EMALFORMED);
+            next_sequence_number++;
 
             upng_frame* frame = &upng->frames[cur_frame_index];
             frame->compressed_size += length;
@@ -202,7 +182,7 @@ static upng_error upng_process_chunks(upng_t* upng)
             CHECK_RET(upng, upng->source.read(upng->source.user, chunk_data_offset, data, 8) == 8, UPNG_EREAD);
 
             upng->frame_count = MAKE_DWORD_PTR(data);
-            upng->play_count = MAKE_DWORD_PTR(data);
+            upng->play_count = MAKE_DWORD_PTR(data + 4);
 
             /* Allocate frames */
             upng->frames = (upng_frame*)UPNG_MEM_ALLOC(sizeof(upng_frame) * upng->frame_count);
@@ -217,14 +197,13 @@ static upng_error upng_process_chunks(upng_t* upng)
             uint8_t data[26];
             CHECK_RET(upng, upng->source.read(upng->source.user, chunk_data_offset, data, 26) == 26, UPNG_EREAD);
 
-            /* make sure the fcTL chunks are in order */
-            unsigned int stated_frame_index = MAKE_DWORD_PTR(data);
-            CHECK_RET(upng, stated_frame_index == cur_frame_index + 1, UPNG_EMALFORMED);
-            CHECK_RET(upng, stated_frame_index < upng->frame_count, UPNG_EMALFORMED);
-            cur_frame_index++;
+            /* check sequence number */
+            unsigned int sequence_number = MAKE_DWORD_PTR(data);
+            CHECK_RET(upng, next_sequence_number == sequence_number, UPNG_EMALFORMED);
+            next_sequence_number++;
 
-            /* read data into frame structure */
-            upng_frame* frame = &upng->frames[cur_frame_index];
+            /* read data into next frame structure */
+            upng_frame* frame = &upng->frames[++cur_frame_index];
             frame->rect.width = MAKE_DWORD_PTR(data + 4);
             frame->rect.height = MAKE_DWORD_PTR(data + 8);
             frame->rect.x_offset = MAKE_DWORD_PTR(data + 12);
@@ -238,18 +217,25 @@ static upng_error upng_process_chunks(upng_t* upng)
             /* validate data */
             CHECK_RET(upng, frame->rect.x_offset >= 0 && frame->rect.y_offset >= 0, UPNG_EMALFORMED);
             CHECK_RET(upng, frame->rect.width > 0 && frame->rect.height > 0, UPNG_EMALFORMED);
-            CHECK_RET(upng, frame->rect.x_offset + frame->rect.width <= upng->rect.width, UPNG_EMALFORMED);
-            CHECK_RET(upng, frame->rect.y_offset + frame->rect.height <= upng->rect.height, UPNG_EMALFORMED);
+            CHECK_RET(upng, frame->rect.x_offset + frame->rect.width <= upng->defaultImage.rect.width, UPNG_EMALFORMED);
+            CHECK_RET(upng, frame->rect.y_offset + frame->rect.height <= upng->defaultImage.rect.height, UPNG_EMALFORMED);
             CHECK_RET(upng, frame->dispose_op <= UPNG_LAST_DISPOSE_OP, UPNG_EUNSUPPORTED);
             CHECK_RET(upng, frame->blend_op <= UPNG_LAST_BLEND_OP, UPNG_EUNSUPPORTED);
+
+            /* the first frame has special requirements */
+            if (cur_frame_index == 0)
+            {
+                CHECK_RET(upng, frame->rect.x_offset == 0 && frame->rect.y_offset == 0, UPNG_EMALFORMED);
+                CHECK_RET(upng, frame->rect.width == upng->defaultImage.rect.width && frame->rect.height == upng->defaultImage.rect.height, UPNG_EMALFORMED);
+            }
         }
         else if (upng_chunk_type(chunk_header) == CHUNK_OFFS)
         {
             uint8_t data[8];
             CHECK_RET(upng, upng->source.read(upng->source.user, chunk_data_offset, data, 8) == 8, UPNG_EREAD);
 
-            upng->rect.x_offset = MAKE_DWORD_PTR(data);
-            upng->rect.y_offset = MAKE_DWORD_PTR(data + 4);
+            upng->defaultImage.rect.x_offset = MAKE_DWORD_PTR(data);
+            upng->defaultImage.rect.y_offset = MAKE_DWORD_PTR(data + 4);
         }
         else if (upng_chunk_type(chunk_header) == CHUNK_PLTE)
         {
@@ -337,8 +323,8 @@ upng_error upng_header(upng_t *upng)
     CHECK_RET(upng, MAKE_DWORD_PTR(header + 12) == CHUNK_IHDR, UPNG_EMALFORMED);
 
     /* read the values given in the header */
-    upng->rect.width = MAKE_DWORD_PTR(header + 16);
-    upng->rect.height = MAKE_DWORD_PTR(header + 20);
+    upng->defaultImage.rect.width = MAKE_DWORD_PTR(header + 16);
+    upng->defaultImage.rect.height = MAKE_DWORD_PTR(header + 20);
     upng->color_depth = header[24];
     upng->color_type = (upng_color)header[25];
 
@@ -371,35 +357,14 @@ upng_t *upng_new_from_source(upng_source source)
     {
         return NULL;
     }
-
-    upng->buffer = NULL;
-    upng->size = 0;
-
-    upng->rect.width = upng->rect.height = 0;
-    upng->rect.x_offset = upng->rect.y_offset = 0;
-
-    upng->palette = NULL;
-    upng->palette_entries = 0;
-
-    upng->alpha = NULL;
-    upng->alpha_entries = 0;
+    memset(upng, 0, sizeof(upng_t));
 
     upng->color_type = UPNG_RGBA;
     upng->color_depth = 8;
     upng->format = UPNG_RGBA8;
-
-    upng->frames = NULL;
-    upng->frame_count = 0;
-    upng->play_count = 0;
-    upng->current_frame = 0;
+    upng->current_frame = FRAME_INDEX_NONE;
 
     upng->state = UPNG_NEW;
-
-    upng->error = UPNG_EOK;
-    upng->error_line = 0;
-
-    upng->text_count = 0;
-
     upng->source = source;
 
     return upng;
@@ -531,6 +496,17 @@ void upng_free(upng_t *upng)
     UPNG_MEM_FREE(upng);
 }
 
+upng_error upng_reset(upng_t *upng)
+{
+    upng->current_frame = FRAME_INDEX_NONE;
+    if (upng->buffer)
+    {
+        UPNG_MEM_FREE(upng->buffer);
+        upng->buffer = NULL;
+    }
+    return UPNG_EOK;
+}
+
 upng_error upng_get_error(const upng_t *upng)
 {
     return upng->error;
@@ -543,18 +519,28 @@ unsigned upng_get_error_line(const upng_t *upng)
 
 void upng_get_rect(const upng_t *upng, upng_rect *rect)
 {
-    *rect = upng->rect;
+    *rect = upng->defaultImage.rect;
 }
 
 void upng_get_frame_rect(const upng_t *upng, upng_rect *rect)
 {
-    if (upng->frames != NULL)
-        *rect = upng->frames[upng->current_frame].rect;
+    if (upng->decodedFrame != NULL)
+        *rect = upng->decodedFrame->rect;
 }
 
 unsigned upng_get_frame_index(const upng_t *upng)
 {
     return upng->current_frame;
+}
+
+unsigned upng_get_frame_count(const upng_t *upng)
+{
+    return upng->frame_count;
+}
+
+unsigned upng_get_plays(const upng_t *upng)
+{
+    return upng->play_count;
 }
 
 int upng_get_palette(const upng_t *upng, upng_rgb **palette)
@@ -623,9 +609,4 @@ uint8_t* upng_move_frame_buffer(upng_t *upng)
     uint8_t* buffer = upng->buffer;
     upng->buffer = NULL;
     return buffer;
-}
-
-unsigned upng_get_frame_buffer_size(const upng_t *upng)
-{
-    return upng->size;
 }

@@ -1,8 +1,4 @@
-#include <gtest/gtest.h>
-#include "DebugAllocator.hpp"
-extern "C" {
-#include "../src/upng.h"
-}
+#include "test_common.hpp"
 
 class Memory : public ::testing::Test {
 protected:
@@ -21,7 +17,7 @@ TEST_F(Memory, GetBuffer)
 {
     upng_t *png = upng_new_from_file("test/resources/checker_24bit.png");
     ASSERT_NE(nullptr, png);
-    ASSERT_EQ(UPNG_EOK, upng_decode(png));
+    ASSERT_EQ(UPNG_EOK, upng_decode_default(png));
 
     const auto buffer = upng_get_frame_buffer(png);
     ASSERT_NE(nullptr, png);
@@ -35,7 +31,7 @@ TEST_F(Memory, MoveBuffer)
 {
     upng_t *png = upng_new_from_file("test/resources/checker_24bit.png");
     ASSERT_NE(nullptr, png);
-    ASSERT_EQ(UPNG_EOK, upng_decode(png));
+    ASSERT_EQ(UPNG_EOK, upng_decode_default(png));
 
     auto buffer = upng_move_frame_buffer(png);
     ASSERT_NE(nullptr, png);

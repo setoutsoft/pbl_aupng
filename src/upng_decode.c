@@ -208,15 +208,13 @@ static void post_process_scanlines(upng_t *upng, uint8_t *out, uint8_t *in, cons
 }
 
 /*read a PNG, the result will be in the same color type as the PNG (hence "generic")*/
-upng_error upng_decode(upng_t *upng)
+upng_error upng_decode_frame(upng_t *upng, const upng_frame* frame)
 {
     uint8_t *compressed = NULL;
-    uint8_t *inflated = NULL;
     unsigned long compressed_index = 0;
     unsigned long inflated_size;
     unsigned long chunk_offset;
     uint8_t chunk_header[12];
-    unsigned int fdat_sequence = 0;
     upng_error error;
 
     /* parse the main header, if necessary */
@@ -233,12 +231,11 @@ upng_error upng_decode(upng_t *upng)
     }
 
     /* allocate enough space for the (compressed and filtered) image data */
-    const upng_frame* frame = upng->frames + upng->current_frame;
     compressed = (uint8_t *)UPNG_MEM_ALLOC(frame->compressed_size);
     CHECK_RET(upng, compressed != NULL, UPNG_ENOMEM);
 
     /* scan through the chunks again, this time copying the values into
-        * our compressed buffer.  there's no reason to validate anything a second time. */
+     * our compressed buffer.  there's no reason to validate anything a second time. */
     chunk_offset = frame->data_chunk_offset;
     while (chunk_offset < upng->source.size)
     {
@@ -258,11 +255,6 @@ upng_error upng_decode(upng_t *upng)
         }
         else if (upng_chunk_type(chunk_header) == CHUNK_FDAT)
         {
-            unsigned int stated_sequence;
-            CHECK_GOTO(upng, upng->source.read(upng->source.user, chunk_data_offset, &stated_sequence, 4) == 4, UPNG_EREAD, error);
-            CHECK_GOTO(upng, stated_sequence == fdat_sequence, UPNG_EMALFORMED, error);
-            fdat_sequence++;
-
             CHECK_GOTO(upng, upng->source.read(upng->source.user, chunk_data_offset + 4, compressed + compressed_index, length - 4) == length - 4, UPNG_EREAD, error);
             compressed_index += length - 4;
         }
@@ -277,18 +269,24 @@ upng_error upng_decode(upng_t *upng)
     /* allocate space to store inflated (but still filtered) data */
     int width_aligned_bytes = (frame->rect.width * upng_get_bpp(upng) + 7) / 8;
     inflated_size = (width_aligned_bytes * frame->rect.height) + frame->rect.height; // pad byte
-    inflated = (uint8_t *)UPNG_MEM_ALLOC(inflated_size);
-    CHECK_GOTO(upng, inflated != NULL, UPNG_ENOMEM, error);
+    if (upng->size < inflated_size)
+    {
+        if (upng->buffer != NULL)
+        {
+            UPNG_MEM_FREE(upng->buffer);
+        }
+        upng->buffer = (uint8_t*)UPNG_MEM_ALLOC(inflated_size);
+        CHECK_GOTO(upng, upng->buffer != NULL, UPNG_ENOMEM, error);
+        upng->size = inflated_size;
+    }
 
     /* decompress image data */
-    error = uz_inflate(inflated, inflated_size, compressed, frame->compressed_size);
-    CHECK_GOTO(upng, error == UPNG_EOK, upng->error, error);
+    error = uz_inflate(upng->buffer, inflated_size, compressed, frame->compressed_size);
+    CHECK_GOTO(upng, error == UPNG_EOK, error, error);
     UPNG_MEM_FREE(compressed);
 
     /* unfilter scanlines */
-    post_process_scanlines(upng, inflated, inflated, frame);
-    upng->buffer = inflated;
-    upng->size = width_aligned_bytes * frame->rect.height;
+    post_process_scanlines(upng, upng->buffer, upng->buffer, frame);
 
     if (upng->error != UPNG_EOK)
     {
@@ -299,16 +297,26 @@ upng_error upng_decode(upng_t *upng)
     else
     {
         upng->state = UPNG_DECODED;
+        upng->decodedFrame = frame;
     }
 
     return upng->error;
 
 error:
-    if (inflated != NULL)
-        UPNG_MEM_FREE(inflated);
     if (compressed != NULL)
         UPNG_MEM_FREE(compressed);
     if (upng->buffer != NULL)
         UPNG_MEM_FREE(upng->buffer);
     return upng->error;
+}
+
+upng_error upng_decode_default(upng_t* upng)
+{
+    return upng_decode_frame(upng, &upng->defaultImage);
+}
+
+upng_error upng_decode_next_frame(upng_t *upng)
+{
+    upng->current_frame = (upng->current_frame + 1) % upng->frame_count;
+    upng_decode_frame(upng, &upng->frames[upng->current_frame]);
 }

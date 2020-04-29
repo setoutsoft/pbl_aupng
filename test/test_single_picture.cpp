@@ -1,7 +1,4 @@
-#include <gtest/gtest.h>
-extern "C" {
-#include "../src/upng.h"
-}
+#include "test_common.hpp"
 
 class SinglePicture : public ::testing::Test {};
 
@@ -27,7 +24,7 @@ TEST_F(SinglePicture, Load24Bit)
     ASSERT_EQ(3, upng_get_components(png));
     ASSERT_EQ(UPNG_RGB8, upng_get_format(png));
 
-    ASSERT_EQ(UPNG_EOK, upng_decode(png));
+    ASSERT_EQ(UPNG_EOK, upng_decode_default(png));
     ASSERT_EQ(0, memcmp(upng_get_frame_buffer(png), pixels, sizeof(pixels)));
 
     upng_free(png);
@@ -61,7 +58,7 @@ TEST_F(SinglePicture, Load2Bit)
 
     upng_rgb* palettePtr;
     uint8_t* alphaPtr;
-    ASSERT_EQ(UPNG_EOK, upng_decode(png));
+    ASSERT_EQ(UPNG_EOK, upng_decode_default(png));
     ASSERT_EQ(4, upng_get_palette(png, &palettePtr));
     ASSERT_EQ(0, memcmp(palettePtr, palette, sizeof(palette)));
     ASSERT_EQ(0, upng_get_alpha(png, &alphaPtr));
@@ -90,7 +87,7 @@ TEST_F(SinglePicture, Load1Bit)
     ASSERT_EQ(1, upng_get_components(png));
     ASSERT_EQ(UPNG_LUMINANCE1, upng_get_format(png));
 
-    ASSERT_EQ(UPNG_EOK, upng_decode(png));
+    ASSERT_EQ(UPNG_EOK, upng_decode_default(png));
     ASSERT_EQ(0, memcmp(upng_get_frame_buffer(png), pixels, sizeof(pixels)));
 
     upng_free(png);
@@ -100,7 +97,7 @@ TEST_F(SinglePicture, TextChunks)
 {
     upng_t *png = upng_new_from_file("test/resources/hidden_texts.png");
     ASSERT_NE(nullptr, png);
-    ASSERT_EQ(UPNG_EOK, upng_decode(png));
+    ASSERT_EQ(UPNG_EOK, upng_decode_default(png));
 
     const char* content;
     ASSERT_STREQ("Author", upng_get_text(png, &content, 0));

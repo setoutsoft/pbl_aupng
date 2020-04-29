@@ -132,8 +132,6 @@ typedef struct upng_text
 
 struct upng_t
 {
-    upng_rect rect;
-
     upng_rgb *palette;
     uint8_t palette_entries;
 
@@ -144,12 +142,10 @@ struct upng_t
     unsigned color_depth;
     upng_format format;
 
-    uint8_t *buffer;
-    unsigned long size;
-
     unsigned int play_count;
     unsigned int frame_count;
     upng_frame* frames;
+    upng_frame defaultImage;
 
     upng_text text[10];
     unsigned int text_count;
@@ -159,6 +155,10 @@ struct upng_t
 
     upng_state state;
     upng_source source;
+
+    const upng_frame* decodedFrame;
+    uint8_t *buffer;
+    unsigned long size;
     unsigned int current_frame;
 };
 
