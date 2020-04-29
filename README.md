@@ -1,8 +1,9 @@
-# aupng - [upng](https://github.com/elanthis/upng) with [APNG](https://wiki.mozilla.org/APNG_Specification) support
+# pbl_aupng - [upng](https://github.com/elanthis/upng) with [APNG](https://wiki.mozilla.org/APNG_Specification) support for pebble
 
 ## Why?
 
 upng is currently used by [RebbleOS](https://github.com/ginge/FreeRTOS-Pebble) which strives to be API-compatible to the old PebbleOS including `gbitmap_sequence`, which uses APNG images. Thus this project is for developing the basic APNG support and then implement the `gbitmap_sequence` API.
+In the process much of the vast support of the original upng is removed in order to suit pebble. In turn this project might be very unsuitable for everything non-pebble.
 
 ## How?
 
