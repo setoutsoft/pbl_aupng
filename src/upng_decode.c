@@ -306,13 +306,26 @@ error:
     if (compressed != NULL)
         UPNG_MEM_FREE(compressed);
     if (upng->buffer != NULL)
+    {
         UPNG_MEM_FREE(upng->buffer);
+        upng->buffer = NULL;
+    }
     return upng->error;
 }
 
 upng_error upng_decode_default(upng_t* upng)
 {
     return upng_decode_frame(upng, &upng->defaultImage);
+}
+
+unsigned upng_get_width(upng_t *upng)
+{
+    return upng->defaultImage.rect.width;
+}
+
+unsigned upng_get_height(upng_t *upng)
+{
+    return upng->defaultImage.rect.height;
 }
 
 upng_error upng_decode_next_frame(upng_t *upng)

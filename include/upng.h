@@ -49,7 +49,8 @@ extern "C"
         UPNG_EUNINTERLACED = 6, /* image interlacing is not supported */
         UPNG_EUNFORMAT = 7,     /* image color format is not supported */
         UPNG_EPARAM = 8,        /* invalid parameter to method call */
-        UPNG_EREAD = 9          /* read callback did not return all data */
+        UPNG_EREAD = 9,          /* read callback did not return all data */
+        UPNG_NOINVLATE= 10       /* inflate function is not set */ 
     } upng_error;
 
     typedef enum upng_format
@@ -105,11 +106,12 @@ extern "C"
 #ifdef UPNG_USE_STDIO
     upng_t *upng_new_from_file(const char *path);
 #endif
-    upng_t *upng_new_from_bytes(unsigned char *source_buffer, unsigned long source_size, unsigned char **buffer);
+    upng_t *upng_new_from_bytes(const unsigned char *source_buffer, unsigned long source_size);
     upng_t *upng_new_from_source(upng_source source);
     void upng_free(upng_t *upng);
 
     upng_error upng_header(upng_t *upng);
+
     // jumps to first frame
     upng_error upng_reset(upng_t *upng);
     // decodes only the main image (as if no apng support)
@@ -118,6 +120,7 @@ extern "C"
     upng_error upng_decode_next_frame(upng_t *upng);
     // moves ownership out of upng
     uint8_t *upng_move_frame_buffer(upng_t *upng);
+    unsigned upng_get_frame_delay(const upng_t *upng);
 
     upng_error upng_get_error(const upng_t *upng);
     unsigned upng_get_error_line(const upng_t *upng);
@@ -125,6 +128,8 @@ extern "C"
     void upng_get_frame_rect(const upng_t *upng, upng_rect *rect);
     unsigned upng_get_frame_index(const upng_t *upng);
     unsigned upng_get_frame_count(const upng_t *upng);
+    unsigned upng_get_width(upng_t *upng);
+    unsigned upng_get_height(upng_t *upng);
     unsigned upng_get_bpp(const upng_t *upng);
     unsigned upng_get_bitdepth(const upng_t *upng);
     unsigned upng_get_components(const upng_t *upng);
@@ -138,6 +143,8 @@ extern "C"
     // returns keyword and text_out matching keyword
     const char *upng_get_text(const upng_t *upng, const char **text_out, unsigned int index);
 
+    typedef int (*upng_inflate_cb)(char *out, int outsize, const char *in, int insize);
+    void upng_set_inflate(upng_inflate_cb fun_inflate);
 #ifdef __cplusplus
 }
 #endif

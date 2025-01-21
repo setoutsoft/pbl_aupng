@@ -1,11 +1,11 @@
 cmake_minimum_required (VERSION 3.10 FATAL_ERROR)
 project(aupng)
 
+add_definitions(-D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING)
+add_definitions(-DUPNG_MEM_MGR)
 
 add_subdirectory(gtest)
 
-add_definitions(-D_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING)
-add_definitions(-DUPNG_MEM_MGR)
 ###################################################################
 # aupng
 ###################################################################
@@ -27,6 +27,7 @@ target_include_directories(aupng
 # test_aupng
 ###################################################################
 include_directories("gtest/include")
+include_directories("stb")
 
 add_executable(test_aupng
     test/DebugAllocator.hpp

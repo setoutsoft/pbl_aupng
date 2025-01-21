@@ -373,7 +373,7 @@ upng_t *upng_new_from_source(upng_source source)
 
 typedef struct upng_byte_source_context
 {
-    void* buffer;
+    const unsigned char* buffer;
     unsigned long size;
 } upng_byte_source_context;
 
@@ -387,7 +387,7 @@ static unsigned long upng_byte_source_read(void* user, unsigned long offset, voi
     if (offset + bytes_to_copy > context->size)
         bytes_to_copy = context->size - offset;
 
-    memcpy(out_buffer, (char*)context->buffer + offset, bytes_to_copy);
+    memcpy(out_buffer, context->buffer + offset, bytes_to_copy);
     return bytes_to_copy;
 }
 
@@ -396,7 +396,7 @@ static void upng_byte_source_free(void* user)
     UPNG_MEM_FREE(user);
 }
 
-upng_t *upng_new_from_bytes(uint8_t *raw_buffer, unsigned long size, uint8_t **out_buffer)
+upng_t *upng_new_from_bytes(const unsigned char *raw_buffer, unsigned long size)
 {
     upng_byte_source_context* context = (upng_byte_source_context*)UPNG_MEM_ALLOC(sizeof(upng_byte_source_context));
     if (context == NULL)
@@ -610,4 +610,22 @@ uint8_t* upng_move_frame_buffer(upng_t *upng)
     uint8_t* buffer = upng->buffer;
     upng->buffer = NULL;
     return buffer;
+}
+
+unsigned int upng_get_frame_delay(const upng_t *upng)
+{
+    if (upng->current_frame == FRAME_INDEX_NONE)
+        return 0;
+    upng_frame* frame = upng->frames+upng->current_frame;
+    uint16_t delay_num = frame->delay_numerator, delay_den = frame->delay_denominator;
+    uint32_t ret = 0;
+    if (delay_den == 0 || delay_den == 100)
+        ret = delay_num;
+    else if (delay_den == 10)
+        ret = delay_num * 10;
+    else if (delay_den == 1000)
+        ret = delay_num / 10;
+    else
+        ret = delay_num * 100 / delay_den;
+    return ret*10;
 }

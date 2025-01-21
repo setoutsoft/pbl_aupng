@@ -15,7 +15,7 @@ protected:
 
 TEST_F(Memory, GetBuffer)
 {
-    upng_t *png = upng_new_from_file("/home/flyhigh/work/pbl_aupng/test/resources/checker_24bit.png");
+    upng_t *png = upng_new_from_file("./resources/checker_24bit.png");
     ASSERT_NE(nullptr, png);
     ASSERT_EQ(UPNG_EOK, upng_decode_default(png));
 
@@ -29,7 +29,7 @@ TEST_F(Memory, GetBuffer)
 
 TEST_F(Memory, MoveBuffer)
 {
-    upng_t *png = upng_new_from_file("/home/flyhigh/work/pbl_aupng/test/resources/checker_24bit.png");
+    upng_t *png = upng_new_from_file("./resources/checker_24bit.png");
     ASSERT_NE(nullptr, png);
     ASSERT_EQ(UPNG_EOK, upng_decode_default(png));
 
