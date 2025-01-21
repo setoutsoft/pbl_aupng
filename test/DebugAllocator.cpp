@@ -9,7 +9,7 @@ namespace
 }
 extern "C"
 {
-    void* upng_mem_alloc(unsigned size, const char* file, int line)
+    void* upng_mem_alloc(unsigned long size, const char* file, int line)
     {
         return global_debug_allocator.allocate(static_cast<size_t>(size), file, line);
     }
