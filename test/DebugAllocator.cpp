@@ -1,6 +1,7 @@
 #include "DebugAllocator.hpp"
 #include <exception>
 #include <algorithm>
+#include <stdexcept>
 
 namespace
 {

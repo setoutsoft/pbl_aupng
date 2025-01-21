@@ -10,7 +10,7 @@ TEST_F(SinglePicture, Load24Bit)
         0xff, 0x00, 0x00,
         0x00, 0xff, 0x00
     };
-    upng_t *png = upng_new_from_file("test/resources/checker_24bit.png");
+    upng_t *png = upng_new_from_file("/home/flyhigh/work/pbl_aupng/test/resources/checker_24bit.png");
     ASSERT_NE(nullptr, png);
     ASSERT_EQ(UPNG_EOK, upng_get_error(png));
 
@@ -42,7 +42,7 @@ TEST_F(SinglePicture, Load2Bit)
         0b00010000,
         0b10110000
     };
-    upng_t *png = upng_new_from_file("test/resources/checker_2bit.png");
+    upng_t *png = upng_new_from_file("/home/flyhigh/work/pbl_aupng/test/resources/checker_2bit.png");
     ASSERT_NE(nullptr, png);
     ASSERT_EQ(UPNG_EOK, upng_get_error(png));
 
@@ -73,7 +73,7 @@ TEST_F(SinglePicture, Load1Bit)
         0b10000000,
         0b01000000
     };
-    upng_t *png = upng_new_from_file("test/resources/checker_1bit.png");
+    upng_t *png = upng_new_from_file("/home/flyhigh/work/pbl_aupng/test/resources/checker_1bit.png");
     ASSERT_NE(nullptr, png);
     ASSERT_EQ(UPNG_EOK, upng_get_error(png));
 
@@ -95,7 +95,7 @@ TEST_F(SinglePicture, Load1Bit)
 
 TEST_F(SinglePicture, TextChunks)
 {
-    upng_t *png = upng_new_from_file("test/resources/hidden_texts.png");
+    upng_t *png = upng_new_from_file("/home/flyhigh/work/pbl_aupng/test/resources/hidden_texts.png");
     ASSERT_NE(nullptr, png);
     ASSERT_EQ(UPNG_EOK, upng_decode_default(png));
 
