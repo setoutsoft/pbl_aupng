@@ -582,6 +582,7 @@ static upng_error inflate_uncompressed(unsigned char *out, unsigned long outsize
     }
 
     (*bp) = p * 8;
+    return UPNG_EOK;
 }
 
 /*inflate the deflated data (cfr. deflate spec); return value is the error*/

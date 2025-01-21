@@ -30,6 +30,7 @@ freely, subject to the following restrictions:
 #include <string.h>
 #include <limits.h>
 
+
 static upng_format determine_format(upng_t *upng)
 {
     switch (upng->color_type)
@@ -239,7 +240,7 @@ static upng_error upng_process_chunks(upng_t* upng)
         }
         else if (upng_chunk_type(chunk_header) == CHUNK_PLTE)
         {
-            upng->palette_entries = length / 3; // 3 bytes per color entry
+            upng->palette_entries = (uint8_t)(length / 3); // 3 bytes per color entry
             if (upng->palette)
             {
                 UPNG_MEM_FREE(upng->palette);
@@ -251,7 +252,7 @@ static upng_error upng_process_chunks(upng_t* upng)
         }
         else if (upng_chunk_type(chunk_header) == CHUNK_tRNS)
         {
-            upng->alpha_entries = length;
+            upng->alpha_entries = (uint8_t)length;
             if (upng->alpha)
             {
                 UPNG_MEM_FREE(upng->alpha);
@@ -386,7 +387,7 @@ static unsigned long upng_byte_source_read(void* user, unsigned long offset, voi
     if (offset + bytes_to_copy > context->size)
         bytes_to_copy = context->size - offset;
 
-    memcpy(out_buffer, context->buffer + offset, bytes_to_copy);
+    memcpy(out_buffer, (char*)context->buffer + offset, bytes_to_copy);
     return bytes_to_copy;
 }
 
@@ -425,7 +426,7 @@ static unsigned long upng_file_source_read(void* user, unsigned long offset, voi
         bytes_to_read = size - offset;
 
     fseek(fp, offset, SEEK_SET);
-    return fread(out_buffer, 1, bytes_to_read, fp);
+    return (unsigned long)fread(out_buffer, 1, bytes_to_read, fp);
 }
 
 static void upng_file_source_free(void* user)

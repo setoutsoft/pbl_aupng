@@ -22,12 +22,12 @@ private:
     {
         // this is an owning pointer depending on whether
         // this is a child allocator (in which case it is not owning)
-        std::byte* start;
+        unsigned char* start;
         size_t size;
         const char* file;
         int line;
 
-        Block(std::byte* start = nullptr, size_t size = 0, const char* file = nullptr, int line = -1);
+        Block(unsigned char* start = nullptr, size_t size = 0, const char* file = nullptr, int line = -1);
         bool operator == (const Block& other) const;
         bool isInside(const void* ptr) const;
     };

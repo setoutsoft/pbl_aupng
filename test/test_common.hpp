@@ -2,7 +2,7 @@
 #include <gtest/gtest.h>
 #include "DebugAllocator.hpp"
 extern "C" {
-#include "../src/upng.h"
+#include "../include/upng.h"
 }
 
 static bool operator == (const upng_rect& a, const upng_rect& b)

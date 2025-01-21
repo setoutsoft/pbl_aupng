@@ -9,12 +9,12 @@ namespace
 }
 extern "C"
 {
-    void* test_upng_malloc(unsigned size, const char* file, int line)
+    void* upng_mem_alloc(unsigned size, const char* file, int line)
     {
         return global_debug_allocator.allocate(static_cast<size_t>(size), file, line);
     }
 
-    void test_upng_free(void* ptr)
+    void upng_mem_free(void* ptr)
     {
         return global_debug_allocator.deallocate(ptr);
     }
@@ -24,7 +24,7 @@ DebugAllocator* DebugAllocator::GetGlobalInstance()
     return &global_debug_allocator;
 }
 
-DebugAllocator::Block::Block(std::byte* _start, size_t _size, const char* _file, int _line) :
+DebugAllocator::Block::Block(unsigned char* _start, size_t _size, const char* _file, int _line) :
     start(_start), size(_size), file(_file), line(_line) {}
 
 bool DebugAllocator::Block::operator== (const Block& other) const
@@ -63,13 +63,13 @@ void* DebugAllocator::allocate(size_t size, const char* file, int line)
 {
     Block block;
     if (parent == nullptr)
-        block = known_blocks.emplace_back(new std::byte[size], size, file, line);
+        known_blocks.emplace_back(new unsigned char[size], size, file, line);
     else
     {
         parent->allocate(size, file, line);
-        block = known_blocks.back();
     }
-    
+    block = known_blocks.back();
+
     for (auto& child : children)
         child->onParentAllocation(block);
 

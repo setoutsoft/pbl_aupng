@@ -319,4 +319,5 @@ upng_error upng_decode_next_frame(upng_t *upng)
 {
     upng->current_frame = (upng->current_frame + 1) % upng->frame_count;
     upng_decode_frame(upng, &upng->frames[upng->current_frame]);
+    return UPNG_EOK;
 }
